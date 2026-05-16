@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "将 Strava 活动中的照片批量导出为单个 ZIP 文件。在浏览器中本地运行。"
+	},
+	"selectAllVisible": {
+		"message": "选择所有可见项"
+	},
+	"includeVideos": {
+		"message": "包含视频"
+	},
+	"downloadSelected": {
+		"message": "下载照片"
+	},
+	"selectedCount": {
+		"message": "已选择 $COUNT$ 项",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "照片"
+	},
+	"photoButtonTitle": {
+		"message": "下载此活动的照片"
+	},
+	"preparingDownloads": {
+		"message": "正在准备 $COUNT$ 项活动…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "正在下载 $COMPLETED$ / $TOTAL$ 张照片…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "正在下载 $COMPLETED$ / $TOTAL$ 项…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "正在创建 ZIP…"
+	},
+	"savedPhotos": {
+		"message": "已从 $ACTIVITIES$ 项活动中保存 $COUNT$ 张照片。",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "已从 $ACTIVITIES$ 项活动中保存 $PHOTOS$ 张照片和 $VIDEOS$ 个视频。",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "已保存 $OK$ 项，跳过 $FAILED$ 项（$REASON$）",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "所选活动中未找到照片。"
+	},
+	"noMediaFound": {
+		"message": "所选活动中未找到照片或视频。"
+	},
+	"downloadFailed": {
+		"message": "失败：$REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

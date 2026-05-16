@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Strava 활동의 사진을 하나의 ZIP 파일로 일괄 내보내기. 브라우저에서 로컬로 실행됩니다."
+	},
+	"selectAllVisible": {
+		"message": "표시된 항목 모두 선택"
+	},
+	"includeVideos": {
+		"message": "동영상 포함"
+	},
+	"downloadSelected": {
+		"message": "사진 다운로드"
+	},
+	"selectedCount": {
+		"message": "$COUNT$개 선택됨",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "사진"
+	},
+	"photoButtonTitle": {
+		"message": "이 활동의 사진 다운로드"
+	},
+	"preparingDownloads": {
+		"message": "$COUNT$개의 활동 준비 중…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "$COMPLETED$ / $TOTAL$ 사진 다운로드 중…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "$COMPLETED$ / $TOTAL$ 항목 다운로드 중…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "ZIP 만드는 중…"
+	},
+	"savedPhotos": {
+		"message": "$ACTIVITIES$개의 활동에서 사진 $COUNT$개를 저장했습니다.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "$ACTIVITIES$개의 활동에서 사진 $PHOTOS$개와 동영상 $VIDEOS$개를 저장했습니다.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "$OK$개 저장, $FAILED$개 건너뜀 ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "선택한 활동에서 사진을 찾을 수 없습니다."
+	},
+	"noMediaFound": {
+		"message": "선택한 활동에서 사진이나 동영상을 찾을 수 없습니다."
+	},
+	"downloadFailed": {
+		"message": "실패: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

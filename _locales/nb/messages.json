@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Masseeksport av bilder fra dine Strava-aktiviteter til én ZIP-fil. Kjører lokalt i nettleseren din."
+	},
+	"selectAllVisible": {
+		"message": "Velg alle synlige"
+	},
+	"includeVideos": {
+		"message": "Inkluder videoer"
+	},
+	"downloadSelected": {
+		"message": "Last ned bilder"
+	},
+	"selectedCount": {
+		"message": "$COUNT$ valgt",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "Bilder"
+	},
+	"photoButtonTitle": {
+		"message": "Last ned bilder fra denne aktiviteten"
+	},
+	"preparingDownloads": {
+		"message": "Forbereder $COUNT$ aktiviteter…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "Laster ned $COMPLETED$ / $TOTAL$ bilder…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "Laster ned $COMPLETED$ / $TOTAL$ elementer…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "Lager zip…"
+	},
+	"savedPhotos": {
+		"message": "Lagret $COUNT$ bilder fra $ACTIVITIES$ aktiviteter.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "Lagret $PHOTOS$ bilder og $VIDEOS$ videoer fra $ACTIVITIES$ aktiviteter.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "Lagret $OK$, hoppet over $FAILED$ ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "Ingen bilder funnet i de valgte aktivitetene."
+	},
+	"noMediaFound": {
+		"message": "Ingen bilder eller videoer funnet i de valgte aktivitetene."
+	},
+	"downloadFailed": {
+		"message": "Mislyktes: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

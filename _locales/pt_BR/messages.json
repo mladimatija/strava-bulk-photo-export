@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Exportação em massa de fotos das suas atividades do Strava em um único arquivo ZIP. Funciona localmente no navegador."
+	},
+	"selectAllVisible": {
+		"message": "Selecionar todas as visíveis"
+	},
+	"includeVideos": {
+		"message": "Incluir vídeos"
+	},
+	"downloadSelected": {
+		"message": "Baixar fotos"
+	},
+	"selectedCount": {
+		"message": "$COUNT$ selecionadas",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "Fotos"
+	},
+	"photoButtonTitle": {
+		"message": "Baixar fotos desta atividade"
+	},
+	"preparingDownloads": {
+		"message": "Preparando $COUNT$ atividades…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "Baixando $COMPLETED$ / $TOTAL$ fotos…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "Baixando $COMPLETED$ / $TOTAL$ itens…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "Criando zip…"
+	},
+	"savedPhotos": {
+		"message": "$COUNT$ fotos salvas de $ACTIVITIES$ atividades.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "$PHOTOS$ fotos e $VIDEOS$ vídeos salvos de $ACTIVITIES$ atividades.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "$OK$ salvos, $FAILED$ ignorados ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "Nenhuma foto encontrada nas atividades selecionadas."
+	},
+	"noMediaFound": {
+		"message": "Nenhuma foto ou vídeo encontrado nas atividades selecionadas."
+	},
+	"downloadFailed": {
+		"message": "Falhou: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}
