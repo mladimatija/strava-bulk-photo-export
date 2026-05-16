@@ -96,7 +96,7 @@ The extension fetches photos directly from the same Strava CDN URLs the page its
 
 ### From the Chrome Web Store
 
-Coming soon. Once published the listing will live at `<URL>`.
+https://chromewebstore.google.com/detail/strava-bulk-photo-export/gjflabjekffabmfdchildjbdkkepacdk
 
 ### From source (developer mode)
 
