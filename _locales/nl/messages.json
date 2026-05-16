@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Bulkexport van foto's uit je Strava-activiteiten in één ZIP-bestand. Draait lokaal in je browser."
+	},
+	"selectAllVisible": {
+		"message": "Alles zichtbaar selecteren"
+	},
+	"includeVideos": {
+		"message": "Inclusief video's"
+	},
+	"downloadSelected": {
+		"message": "Foto's downloaden"
+	},
+	"selectedCount": {
+		"message": "$COUNT$ geselecteerd",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "Foto's"
+	},
+	"photoButtonTitle": {
+		"message": "Foto's voor deze activiteit downloaden"
+	},
+	"preparingDownloads": {
+		"message": "$COUNT$ activiteiten voorbereiden…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "$COMPLETED$ / $TOTAL$ foto's downloaden…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "$COMPLETED$ / $TOTAL$ items downloaden…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "Zip maken…"
+	},
+	"savedPhotos": {
+		"message": "$COUNT$ foto's opgeslagen uit $ACTIVITIES$ activiteiten.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "$PHOTOS$ foto's en $VIDEOS$ video's opgeslagen uit $ACTIVITIES$ activiteiten.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "$OK$ opgeslagen, $FAILED$ overgeslagen ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "Geen foto's gevonden in de geselecteerde activiteiten."
+	},
+	"noMediaFound": {
+		"message": "Geen foto's of video's gevonden in de geselecteerde activiteiten."
+	},
+	"downloadFailed": {
+		"message": "Mislukt: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

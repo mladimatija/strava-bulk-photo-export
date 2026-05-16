@@ -1,0 +1,109 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export",
+		"description": "Extension name shown in chrome://extensions and the Chrome Web Store listing."
+	},
+	"extensionDescription": {
+		"message": "Bulk export photos (and optionally videos) from your Strava activities into a single zip. Runs locally in your browser.",
+		"description": "Short blurb shown in the Chrome Web Store listing. Stay under 132 characters."
+	},
+	"selectAllVisible": {
+		"message": "Select all visible",
+		"description": "Label for the checkbox that toggles all photo-bearing rows on the current page."
+	},
+	"includeVideos": {
+		"message": "Include videos",
+		"description": "Label for the checkbox that decides whether videos are bundled alongside photos. Off by default."
+	},
+	"downloadSelected": {
+		"message": "Download photos",
+		"description": "Primary action button. Disabled until at least one row with photos is selected."
+	},
+	"selectedCount": {
+		"message": "$COUNT$ selected",
+		"description": "Status text showing how many rows are currently selected.",
+		"placeholders": {
+			"count": { "content": "$1", "example": "3" }
+		}
+	},
+	"photoButton": {
+		"message": "Photos",
+		"description": "Label on the per-row button that downloads photos for a single activity."
+	},
+	"photoButtonTitle": {
+		"message": "Download photos for this activity",
+		"description": "Tooltip on the per-row photo download button."
+	},
+	"preparingDownloads": {
+		"message": "Preparing $COUNT$ activities…",
+		"description": "Brief status shown immediately after the user clicks Download photos.",
+		"placeholders": {
+			"count": { "content": "$1", "example": "5" }
+		}
+	},
+	"downloadingProgress": {
+		"message": "Downloading $COMPLETED$ / $TOTAL$ photos…",
+		"description": "Progress shown while a photos-only bulk download is in flight.",
+		"placeholders": {
+			"completed": { "content": "$1", "example": "12" },
+			"total": { "content": "$2", "example": "47" }
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "Downloading $COMPLETED$ / $TOTAL$ items…",
+		"description": "Progress shown when the run includes both photos and videos.",
+		"placeholders": {
+			"completed": { "content": "$1", "example": "12" },
+			"total": { "content": "$2", "example": "47" }
+		}
+	},
+	"buildingZip": {
+		"message": "Building zip…",
+		"description": "Final stage of a bulk download - photos are fetched, now JSZip is assembling them."
+	},
+	"savedPhotos": {
+		"message": "Saved $COUNT$ photos from $ACTIVITIES$ activities.",
+		"description": "Terminal success message after a photos-only run.",
+		"placeholders": {
+			"count": { "content": "$1", "example": "47" },
+			"activities": { "content": "$2", "example": "5" }
+		}
+	},
+	"savedMedia": {
+		"message": "Saved $PHOTOS$ photos and $VIDEOS$ videos from $ACTIVITIES$ activities.",
+		"description": "Terminal success message when a run includes both photos and videos.",
+		"placeholders": {
+			"photos": { "content": "$1", "example": "42" },
+			"videos": { "content": "$2", "example": "5" },
+			"activities": { "content": "$3", "example": "7" }
+		}
+	},
+	"savedWithSkips": {
+		"message": "Saved $OK$ items, skipped $FAILED$ ($REASON$)",
+		"description": "Terminal partial-success message. REASON is the first failure reason verbatim. REASON may stay in English.",
+		"placeholders": {
+			"ok": { "content": "$1", "example": "42" },
+			"failed": { "content": "$2", "example": "5" },
+			"reason": { "content": "$3", "example": "HTTP 404" }
+		}
+	},
+	"noPhotosFound": {
+		"message": "No photos found in the selected activities.",
+		"description": "Terminal message when the user kicks off a photos-only run but no selected activity has photos."
+	},
+	"noMediaFound": {
+		"message": "No photos or videos found in the selected activities.",
+		"description": "Terminal message when the user kicks off a run with Include videos checked but no selected activity has any media."
+	},
+	"downloadFailed": {
+		"message": "Failed: $REASON$",
+		"description": "Terminal error message when an entire bulk run fails.",
+		"placeholders": {
+			"reason": { "content": "$1", "example": "Network error" }
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com",
+		"description": "Hover tooltip on the Ko-fi support button in the toolbar. Keep 'Ko-fi' as a proper noun."
+	}
+}

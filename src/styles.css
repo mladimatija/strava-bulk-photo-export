@@ -1,0 +1,399 @@
+/* All injected UI is namespaced under `.sbpx-…` to avoid colliding with
+   Strava's own class names. Strava's design language is white-on-light with
+   the orange accent (#FC4C02); we follow that so the toolbar feels native. */
+
+.sbpx-toolbar {
+	/* Fill the parent's content area instead of shrinking to fit. The
+	   single-mode toolbar lives inside `#activity-photos-container` which
+	   is much wider than the thumbnail strip; without this the toolbar
+	   reads as a small pill instead of a full-width strip. */
+	display: flex;
+	box-sizing: border-box;
+	width: 100%;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 14px;
+	margin: 12px 0;
+	background: #ffffff;
+	border: 1px solid #e0e3e8;
+	border-radius: 6px;
+	font-family: maison-neue, Helvetica, Arial, sans-serif;
+	font-size: 13px;
+	color: #2d3239;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+/* Single-activity mode wraps so the status drops to a new row beneath the
+   controls. List mode keeps everything on one line because the table-page
+   toolbar is wide enough that a second row would feel wasted. */
+.sbpx-toolbar-single {
+	flex-wrap: wrap;
+	row-gap: 6px;
+}
+
+.sbpx-tool {
+	margin: 0;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	line-height: 1;
+}
+
+/* Strava's global form styles add vertical margin to inputs and don't pin
+   a width, which makes our checkbox sit a few pixels below its label. Fix
+   the checkbox dimensions explicitly so flex alignment lines it up with
+   the text x-height; the !important is the simplest way to win against
+   Strava's `.form-control input` rules without a long selector chain. */
+.sbpx-toolbar input[type='checkbox'] {
+	top: 0 !important;
+	margin: 0 !important;
+	padding: 0;
+	width: 14px;
+	height: 14px;
+	flex: 0 0 auto;
+	vertical-align: middle;
+	cursor: pointer;
+}
+.sbpx-include-videos {
+	color: #6d7177;
+}
+
+.sbpx-count {
+	color: #6d7177;
+	font-variant-numeric: tabular-nums;
+}
+
+.sbpx-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: #6d7177;
+	font-style: italic;
+	min-width: 0;
+	/* Default (list mode): cap the inline status so a long message can't
+	   shove the spacer/ko-fi off the right edge. Single mode overrides
+	   this below by giving status its own full-width row. */
+	max-width: 360px;
+}
+/* Single-activity toolbar: status lives on its own row beneath the
+   controls. `flex-basis: 100%` makes flex-wrap break to a new line; the
+   `max-width` cap no longer applies because the message owns the row. */
+.sbpx-toolbar-single .sbpx-status {
+	flex-basis: 100%;
+	max-width: none;
+}
+/* Hide the status row entirely when there is no message yet, so an
+   otherwise-empty toolbar doesn't reserve a blank strip below the
+   controls. Only relevant for single mode (list mode keeps it inline). */
+.sbpx-toolbar-single .sbpx-status:has(.sbpx-status-text:empty) {
+	display: none;
+}
+.sbpx-status-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sbpx-status[data-kind='ok'] {
+	color: #1e8e3e;
+	font-style: normal;
+}
+.sbpx-status[data-kind='warn'] {
+	color: #b06a00;
+	font-style: normal;
+}
+.sbpx-status[data-kind='err'] {
+	color: #d93025;
+	font-style: normal;
+}
+
+/* Inline progress spinner - visible only while a bulk download is running.
+   Border ring with a coloured top edge that rotates; uses Strava's orange so
+   it ties to the primary action button visually. */
+.sbpx-spinner {
+	display: inline-block;
+	width: 12px;
+	height: 12px;
+	flex: none;
+	border: 2px solid #d4d7dc;
+	border-top-color: #fc4c02;
+	border-radius: 50%;
+	animation: sbpx-spin 0.7s linear infinite;
+}
+.sbpx-spinner[hidden] {
+	display: none;
+}
+@keyframes sbpx-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.sbpx-spacer {
+	flex: 1;
+}
+
+.sbpx-btn {
+	appearance: none;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	padding: 6px 12px;
+	font: inherit;
+	cursor: pointer;
+	background: #f3f4f5;
+	color: #2d3239;
+	transition: background-color 80ms ease;
+}
+.sbpx-btn:hover:not(:disabled) {
+	background: #e7e9eb;
+}
+.sbpx-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.sbpx-btn-primary {
+	background: #fc4c02;
+	color: #ffffff;
+	border-color: #e04500;
+	font-weight: 600;
+}
+.sbpx-btn-primary:hover:not(:disabled) {
+	background: #e04500;
+}
+
+.sbpx-btn-row {
+	padding: 3px 8px;
+	font-size: 12px;
+	line-height: 1;
+}
+
+/* Ko-fi widget - uses the official kofi6.png asset (bundled as a data URL via
+   scripts/build-kofi.js). The image already carries Ko-fi's brand styling,
+   so we just need to render it cleanly. */
+.sbpx-kofi {
+	display: inline-block;
+	line-height: 0;
+	transition:
+		opacity 80ms ease,
+		transform 80ms ease;
+	text-decoration: none;
+}
+.sbpx-kofi:hover,
+.sbpx-kofi:focus-visible {
+	opacity: 0.9;
+	transform: translateY(-1px);
+}
+.sbpx-kofi img {
+	display: block;
+	height: 32px;
+	width: auto;
+	border: 0;
+}
+
+/* Row cells injected into Strava's existing table. */
+.sbpx-cell {
+	padding: 4px 6px;
+	vertical-align: middle;
+	white-space: nowrap;
+}
+.sbpx-cell-check {
+	width: 28px;
+}
+.sbpx-cell-dl {
+	width: 56px;
+	text-align: right;
+}
+.sbpx-row-cb {
+	margin: 0;
+	cursor: pointer;
+}
+
+/* When the Strava Bulk GPX extension is also active, both extensions inject
+   per-row controls into the same row. Rather than each adding its own
+   column, photo-export migrates its checkbox and Photos button INTO the
+   sbgx-cell-* cells GPX already created, so the trailing action column
+   doesn't gain two parallel columns crammed side-by-side.
+   `display: block` then stacks our control on a new line below GPX's.
+
+   The width/margin pair below is what makes the stack actually look right
+   on real Strava. A block element fills its parent's content area by
+   default, and the shared action cell ends up wider than its declared 56
+   px (GPX renders the cell at content width once both buttons are inside).
+   Without a width constraint our button stretches across the full cell
+   starting from the left, which visually places it under whichever Strava
+   action sits at that x-position (typically the Share dropdown) rather
+   than under GPX itself. `width: fit-content` shrinks the button to its
+   label width and `margin-left: auto` shoves that box to the right edge
+   so it sits directly under GPX. The right margin of 0 hugs the cell's
+   right padding the same way GPX's own button does. */
+.sbpx-row-cb-coexisting {
+	display: block;
+	width: fit-content;
+	margin: 4px 0 0 auto;
+}
+.sbpx-btn-row-coexisting {
+	display: block;
+	width: fit-content;
+	margin: 4px 0 0 auto;
+}
+
+/* When Photos is the only child of the GPX action cell (no GPX button to
+   stack beneath), drop the 4 px top margin entirely. The 4 px exists only
+   to space Photos from the GPX button above it - with nothing above, the
+   gap reads as random padding that pushes Photos off-center relative to
+   neighbouring Strava actions (Edit, Delete, Share) in the same row. */
+td.sbgx-cell-dl > .sbpx-btn-row-coexisting:only-child {
+	margin-top: 0;
+}
+
+/* When GPX is also mounted on the page, it renders its own Ko-fi badge
+   in its toolbar. Two identical "Buy me a coffee" pills stacked one above
+   the other reads as a duplicate ask. `syncKofiVisibility()` in content.ts
+   sets the `hidden` attribute on our badge when `.sbgx-toolbar` is detected.
+   The default UA stylesheet honours `hidden` on `<a>`, but we tighten the
+   rule explicitly so a future Strava style that declares `display` on `a`
+   can't accidentally un-hide it. */
+.sbpx-toolbar .sbpx-kofi[hidden] {
+	display: none;
+}
+
+/* ---------- Dark mode ----------
+   Strava ships a dark theme that toggles via OS preference and an explicit
+   site setting. We support both:
+     1. `@media (prefers-color-scheme: dark)` for users who let the OS drive.
+     2. Explicit `html.dark`, `body.dark`, `[data-theme='dark']`, and
+        `[data-color-scheme='dark']` selectors for users who flip Strava's
+        in-site toggle independently of OS preference. Strava has switched
+        between several of these attribute names over the years and we
+        cover the lot so the toolbar stays in sync regardless of which one
+        the page currently uses.
+   The orange brand button stays orange in both modes — it's an action
+   accent, not a surface, and the contrast against the dark surface is
+   already strong. Status colors get bumped to brighter, more saturated
+   variants because the original WCAG-AA tones on white (#1e8e3e, #b06a00,
+   #d93025) look muddy against #1c1f26. */
+@media (prefers-color-scheme: dark) {
+	.sbpx-toolbar {
+		background: #1c1f26;
+		border-color: #2e3138;
+		color: #f3f4f5;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	}
+	.sbpx-include-videos,
+	.sbpx-count,
+	.sbpx-status {
+		color: #9aa0a6;
+	}
+	.sbpx-status[data-kind='ok'] {
+		color: #4ade80;
+	}
+	.sbpx-status[data-kind='warn'] {
+		color: #fbbf24;
+	}
+	.sbpx-status[data-kind='err'] {
+		color: #f87171;
+	}
+	.sbpx-spinner {
+		border-color: #3a3d42;
+		border-top-color: #fc4c02;
+	}
+	.sbpx-btn {
+		background: #2a2d33;
+		color: #f3f4f5;
+		border-color: transparent;
+	}
+	.sbpx-btn:hover:not(:disabled) {
+		background: #353940;
+	}
+	/* Primary stays brand orange; only its hover gets a slight tonal
+	   bump so the press state still reads. */
+	.sbpx-btn-primary {
+		background: #fc4c02;
+		color: #ffffff;
+		border-color: #e04500;
+	}
+	.sbpx-btn-primary:hover:not(:disabled) {
+		background: #e04500;
+	}
+}
+
+/* Explicit-toggle variants. Duplicated rather than chained via `:is(...)`
+   so older Chromium versions (which the e2e baseline still pins) parse
+   the rules without falling back to default styles. */
+html.dark .sbpx-toolbar,
+body.dark .sbpx-toolbar,
+[data-theme='dark'] .sbpx-toolbar,
+[data-color-scheme='dark'] .sbpx-toolbar {
+	background: #1c1f26;
+	border-color: #2e3138;
+	color: #f3f4f5;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+html.dark .sbpx-include-videos,
+html.dark .sbpx-count,
+html.dark .sbpx-status,
+body.dark .sbpx-include-videos,
+body.dark .sbpx-count,
+body.dark .sbpx-status,
+[data-theme='dark'] .sbpx-include-videos,
+[data-theme='dark'] .sbpx-count,
+[data-theme='dark'] .sbpx-status,
+[data-color-scheme='dark'] .sbpx-include-videos,
+[data-color-scheme='dark'] .sbpx-count,
+[data-color-scheme='dark'] .sbpx-status {
+	color: #9aa0a6;
+}
+html.dark .sbpx-status[data-kind='ok'],
+body.dark .sbpx-status[data-kind='ok'],
+[data-theme='dark'] .sbpx-status[data-kind='ok'],
+[data-color-scheme='dark'] .sbpx-status[data-kind='ok'] {
+	color: #4ade80;
+}
+html.dark .sbpx-status[data-kind='warn'],
+body.dark .sbpx-status[data-kind='warn'],
+[data-theme='dark'] .sbpx-status[data-kind='warn'],
+[data-color-scheme='dark'] .sbpx-status[data-kind='warn'] {
+	color: #fbbf24;
+}
+html.dark .sbpx-status[data-kind='err'],
+body.dark .sbpx-status[data-kind='err'],
+[data-theme='dark'] .sbpx-status[data-kind='err'],
+[data-color-scheme='dark'] .sbpx-status[data-kind='err'] {
+	color: #f87171;
+}
+html.dark .sbpx-spinner,
+body.dark .sbpx-spinner,
+[data-theme='dark'] .sbpx-spinner,
+[data-color-scheme='dark'] .sbpx-spinner {
+	border-color: #3a3d42;
+	border-top-color: #fc4c02;
+}
+html.dark .sbpx-btn,
+body.dark .sbpx-btn,
+[data-theme='dark'] .sbpx-btn,
+[data-color-scheme='dark'] .sbpx-btn {
+	background: #2a2d33;
+	color: #f3f4f5;
+	border-color: transparent;
+}
+html.dark .sbpx-btn:hover:not(:disabled),
+body.dark .sbpx-btn:hover:not(:disabled),
+[data-theme='dark'] .sbpx-btn:hover:not(:disabled),
+[data-color-scheme='dark'] .sbpx-btn:hover:not(:disabled) {
+	background: #353940;
+}
+html.dark .sbpx-btn-primary,
+body.dark .sbpx-btn-primary,
+[data-theme='dark'] .sbpx-btn-primary,
+[data-color-scheme='dark'] .sbpx-btn-primary {
+	background: #fc4c02;
+	color: #ffffff;
+	border-color: #e04500;
+}
+html.dark .sbpx-btn-primary:hover:not(:disabled),
+body.dark .sbpx-btn-primary:hover:not(:disabled),
+[data-theme='dark'] .sbpx-btn-primary:hover:not(:disabled),
+[data-color-scheme='dark'] .sbpx-btn-primary:hover:not(:disabled) {
+	background: #e04500;
+}

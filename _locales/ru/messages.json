@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Массовый экспорт фотографий из ваших активностей Strava в один ZIP-файл. Работает локально в браузере."
+	},
+	"selectAllVisible": {
+		"message": "Выбрать все видимые"
+	},
+	"includeVideos": {
+		"message": "Включить видео"
+	},
+	"downloadSelected": {
+		"message": "Скачать фото"
+	},
+	"selectedCount": {
+		"message": "Выбрано: $COUNT$",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "Фото"
+	},
+	"photoButtonTitle": {
+		"message": "Скачать фото этой тренировки"
+	},
+	"preparingDownloads": {
+		"message": "Подготовка $COUNT$ тренировок…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "Загрузка $COMPLETED$ / $TOTAL$ фото…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "Загрузка $COMPLETED$ / $TOTAL$ элементов…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "Создание zip…"
+	},
+	"savedPhotos": {
+		"message": "Сохранено $COUNT$ фото из $ACTIVITIES$ тренировок.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "Сохранено $PHOTOS$ фото и $VIDEOS$ видео из $ACTIVITIES$ тренировок.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "Сохранено: $OK$, пропущено: $FAILED$ ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "В выбранных тренировках фото не найдены."
+	},
+	"noMediaFound": {
+		"message": "В выбранных тренировках не найдены фото или видео."
+	},
+	"downloadFailed": {
+		"message": "Ошибка: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

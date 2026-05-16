@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Strava-orange rounded square background. Same hue as the toolbar's
+       primary button so the action button and the icon read as one thing. -->
+  <rect width="128" height="128" rx="22" fill="#fc4c02"/>
+
+  <!-- White photo card. Fills most of the icon so the "this is a photo"
+       reading survives downscale to 16×16. -->
+  <rect x="20" y="22" width="88" height="74" rx="8" fill="#ffffff"/>
+
+  <!-- Sun (top-left of the photo). -->
+  <circle cx="42" cy="42" r="6" fill="#fc4c02"/>
+
+  <!-- Mountain range across the bottom of the photo. Polygon stays inside
+       the photo card's rect (x: 20–108, y: 22–96) so it never bleeds out. -->
+  <path d="M20 88 L44 50 L60 64 L84 40 L108 70 L108 96 L20 96 Z" fill="#fc4c02"/>
+
+  <!-- Download badge: orange circle outlined in white sits over the
+       photo card's bottom-right corner. The white arrow inside reads as
+       "save this photo" - same metaphor most photo apps use. -->
+  <circle cx="98" cy="98" r="22" fill="#fc4c02" stroke="#ffffff" stroke-width="6"/>
+  <path d="M98 86 v22 M86 96 l12 12 l12 -12"
+        fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

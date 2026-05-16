@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Hromadný export fotografií z vašich aktivit na Stravě do jednoho ZIP souboru. Běží lokálně v prohlížeči."
+	},
+	"selectAllVisible": {
+		"message": "Vybrat vše viditelné"
+	},
+	"includeVideos": {
+		"message": "Včetně videí"
+	},
+	"downloadSelected": {
+		"message": "Stáhnout fotky"
+	},
+	"selectedCount": {
+		"message": "$COUNT$ vybráno",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "Fotky"
+	},
+	"photoButtonTitle": {
+		"message": "Stáhnout fotky této aktivity"
+	},
+	"preparingDownloads": {
+		"message": "Připravuje se $COUNT$ aktivit…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "Stahování $COMPLETED$ / $TOTAL$ fotek…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "Stahování $COMPLETED$ / $TOTAL$ položek…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "Vytváří se zip…"
+	},
+	"savedPhotos": {
+		"message": "Uloženo $COUNT$ fotek z $ACTIVITIES$ aktivit.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "Uloženo $PHOTOS$ fotek a $VIDEOS$ videí z $ACTIVITIES$ aktivit.",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "Uloženo $OK$ položek, přeskočeno $FAILED$ ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "Ve vybraných aktivitách nebyly nalezeny žádné fotky."
+	},
+	"noMediaFound": {
+		"message": "Ve vybraných aktivitách nebyly nalezeny žádné fotky ani videa."
+	},
+	"downloadFailed": {
+		"message": "Selhalo: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}

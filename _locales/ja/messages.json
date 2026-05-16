@@ -1,0 +1,135 @@
+{
+	"extensionName": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"extensionDescription": {
+		"message": "Stravaのアクティビティから写真を一括でZIPファイルにエクスポート。ブラウザ内でローカルに実行されます。"
+	},
+	"selectAllVisible": {
+		"message": "表示中のすべてを選択"
+	},
+	"includeVideos": {
+		"message": "動画を含める"
+	},
+	"downloadSelected": {
+		"message": "写真をダウンロード"
+	},
+	"selectedCount": {
+		"message": "$COUNT$ 件選択中",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "3"
+			}
+		}
+	},
+	"photoButton": {
+		"message": "写真"
+	},
+	"photoButtonTitle": {
+		"message": "このアクティビティの写真をダウンロード"
+	},
+	"preparingDownloads": {
+		"message": "$COUNT$ 件のアクティビティを準備中…",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "5"
+			}
+		}
+	},
+	"downloadingProgress": {
+		"message": "$COMPLETED$ / $TOTAL$ 枚の写真をダウンロード中…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"downloadingProgressMedia": {
+		"message": "$COMPLETED$ / $TOTAL$ 件をダウンロード中…",
+		"placeholders": {
+			"completed": {
+				"content": "$1",
+				"example": "12"
+			},
+			"total": {
+				"content": "$2",
+				"example": "47"
+			}
+		}
+	},
+	"buildingZip": {
+		"message": "ZIP を作成中…"
+	},
+	"savedPhotos": {
+		"message": "$ACTIVITIES$ 件のアクティビティから $COUNT$ 枚の写真を保存しました。",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "47"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			}
+		}
+	},
+	"savedMedia": {
+		"message": "$ACTIVITIES$ 件のアクティビティから写真 $PHOTOS$ 枚と動画 $VIDEOS$ 本を保存しました。",
+		"placeholders": {
+			"photos": {
+				"content": "$1",
+				"example": "42"
+			},
+			"videos": {
+				"content": "$2",
+				"example": "5"
+			},
+			"activities": {
+				"content": "$3",
+				"example": "7"
+			}
+		}
+	},
+	"savedWithSkips": {
+		"message": "$OK$ 件保存、$FAILED$ 件スキップ ($REASON$)",
+		"placeholders": {
+			"ok": {
+				"content": "$1",
+				"example": "42"
+			},
+			"failed": {
+				"content": "$2",
+				"example": "5"
+			},
+			"reason": {
+				"content": "$3",
+				"example": "HTTP 404"
+			}
+		}
+	},
+	"noPhotosFound": {
+		"message": "選択したアクティビティに写真は見つかりませんでした。"
+	},
+	"noMediaFound": {
+		"message": "選択したアクティビティに写真も動画も見つかりませんでした。"
+	},
+	"downloadFailed": {
+		"message": "失敗: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "Network error"
+			}
+		}
+	},
+	"koFiTitle": {
+		"message": "Buy Me a Coffee at ko-fi.com"
+	}
+}
