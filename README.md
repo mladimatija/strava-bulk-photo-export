@@ -23,17 +23,17 @@ your render, you haven't run that command yet.
 
 Cropped toolbar / row shots:
 
-| Toolbar (idle)                           | Per-row buttons                                  | Bulk download (mid-flight)                  |
+| Toolbar (idle)                           | Per-row buttons                                  | Bulk download, in progress                  |
 | ---------------------------------------- | ------------------------------------------------ | ------------------------------------------- |
 | ![Toolbar](docs/screenshots/toolbar.png) | ![Per-row buttons](docs/screenshots/per-row.png) | ![Bulk download](docs/screenshots/bulk.png) |
 
 Full-page captures (same shots Chrome Web Store sees):
 
-| List page, idle                                        | Mid-flight bulk download                                    |
+| List page, idle                                        | Bulk download, in progress,                                 |
 | ------------------------------------------------------ | ----------------------------------------------------------- |
 | ![List page idle](docs/store/screenshot-1-toolbar.png) | ![Bulk progress](docs/store/screenshot-3-bulk-progress.png) |
 
-| Row close-up                                            | Terminal success                                          |
+| Row close-up                                            | Bulk download, success                                    |
 | ------------------------------------------------------- | --------------------------------------------------------- |
 | ![Row close-up](docs/store/screenshot-2-row-button.png) | ![Bulk success](docs/store/screenshot-4-bulk-success.png) |
 
@@ -41,13 +41,13 @@ Full-page captures (same shots Chrome Web Store sees):
 
 Cropped toolbar shots:
 
-| Idle (status hidden)                                            | Terminal "Saved 4 photos…"                                   |
+| Idle (status hidden)                                            | "Saved 4 photos…"                                            |
 | --------------------------------------------------------------- | ------------------------------------------------------------ |
 | ![Single-activity toolbar](docs/screenshots/single-toolbar.png) | ![Saved 4 photos](docs/screenshots/single-toolbar-saved.png) |
 
 Full-page captures:
 
-| Single activity, idle                                           | Single activity, terminal success                             |
+| Single activity, idle                                           | Single activity, success                                      |
 | --------------------------------------------------------------- | ------------------------------------------------------------- |
 | ![Single page idle](docs/store/screenshot-5-single-toolbar.png) | ![Single success](docs/store/screenshot-6-single-success.png) |
 
@@ -65,7 +65,7 @@ The extension augments three groups of Strava pages: the activities list (`/athl
 
 Everything else - search, sport filter, date filter, sort, pagination - is Strava's own UI. The extension just hooks into whatever's currently on screen.
 
-## Notable extras
+## Other features
 
 **Max-resolution photos.** The service worker probes the bare (size-stripped) photo URL before falling back to the `-2048xN` variant Strava renders inline, so the resulting zip contains the upload original whenever the CDN serves it.
 
