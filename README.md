@@ -61,7 +61,7 @@ The extension augments three groups of Strava pages: the activities list (`/athl
 
 **On a single-activity page**, the same toolbar mounts beneath the photo thumbnails inside `#activity-photos-container`, with Select-all and the count widget omitted because the activity is implicit from the URL. The bulk button starts enabled and is labelled Download photos. One click downloads every photo from the current activity as `strava_media_<activity-id>.zip`, with the status message dropping onto its own row beneath the controls so a long "Saved 12 photos…" never gets clipped.
 
-**On every page**, activities with no photos are skipped silently - no empty folders, no noise. The toolbar surfaces a `No photos found` warning when none of the selected activities have any media, and a partial-success `Saved N items, skipped M (reason)` warning when some photo fetches fail while others succeed.
+**On every page**, activities with no photos are skipped silently - no empty folders. The toolbar surfaces a `No photos found` warning when none of the selected activities have any media, and a partial-success `Saved N items, skipped M (reason)` warning when some photo fetches fail while others succeed.
 
 Everything else - search, sport filter, date filter, sort, pagination - is Strava's own UI. The extension just hooks into whatever's currently on screen.
 
@@ -73,8 +73,6 @@ Everything else - search, sport filter, date filter, sort, pagination - is Strav
 
 **Optional video export.** Tick the toolbar's Include videos checkbox and the run also pulls Strava's HLS streams. The service worker fetches the master `.m3u8`, picks the highest-bandwidth variant, concatenates every `.ts` segment, and bundles the result as `video-NN.ts` inside each activity's folder. Run `ffmpeg -i video-01.ts -c copy video-01.mp4` to remux losslessly to MP4 if you prefer that container.
 
-**Dark mode.** The toolbar matches Strava's own dark theme. The extension responds to both the OS `prefers-color-scheme: dark` and to Strava's explicit toggles (`html.dark`, `body.dark`, `[data-theme='dark']`, `[data-color-scheme='dark']`), so the toolbar flips together with the rest of the page regardless of how the user landed in dark mode.
-
 **Localized UI.** 15 locales ship out of the box; missing keys fall back to English. Chrome picks the right one based on the user's browser language - no extension setting required.
 
 ## Why it exists
@@ -85,7 +83,7 @@ If you've been on Strava for years and have a few thousand photos in there, that
 
 ## Why a browser extension instead of a hosted service
 
-Two short answers, the rest in [PRIVACY.md](PRIVACY.md):
+Two answers, the rest is in [PRIVACY.md](PRIVACY.md):
 
 1. **Trust model.** A hosted service that touched your Strava data would need either your OAuth tokens (the official API has limited photo coverage) or your session cookie (a privacy issue - the cookie grants full account access). A local extension sidesteps both: nothing leaves your browser.
 2. **Rate limits.** Strava's per-app rate limits are shared across every user of an app. A hosted service for thousands of people would hit them in minutes. An extension makes requests from each user's own browser session - there is no shared bucket.
