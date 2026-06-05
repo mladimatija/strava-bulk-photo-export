@@ -164,6 +164,14 @@ interface StravaMediaJson {
 	lat?: number | null;
 	lng?: number | null;
 	caption_escaped?: string;
+	/**
+	 * Photo creation time as ISO 8601. Strava's web payload exposes this
+	 * under either `created_at` (UTC) or `created_at_local` (local TZ);
+	 * we accept both. Used as the per-photo EXIF DateTimeOriginal when
+	 * present; otherwise we fall back to the activity-level start time.
+	 */
+	created_at?: string;
+	created_at_local?: string;
 	dimensions?: { large?: { width?: number; height?: number } };
 }
 
@@ -282,6 +290,34 @@ function discoverMediaViaRegex(html: string): StravaMediaJson[] {
 	return out;
 }
 
+/**
+ * Pull the activity's start time out of the page. Tried in order:
+ *
+ *   1. `start_date_local` / `start_date` / `start_time` inside the
+ *      React-props JSON (matches Strava's web payload shape, where the
+ *      activity-detail blob carries `start_date_local: "2024-05-14T10:30:00"`).
+ *      `_local` is preferred because EXIF DateTimeOriginal is a local-time
+ *      field (no TZ).
+ *   2. The `datetime="…"` attribute on any `<time>` element inside the
+ *      activity heading - Strava renders one near the activity title with
+ *      the time in machine-readable ISO form.
+ *
+ * Falls through to undefined if neither shows up. We do not try to parse
+ * the human-readable inner text of `<time>` (e.g. "09:16 on Wednesday, 6
+ * May 2026") because the format varies per Chrome locale and is brittle
+ * to localize across.
+ */
+export function extractActivityStartTime(html: string): string | undefined {
+	const decoded = decodeHtmlEntities(html);
+	const jsonMatch =
+		/"start_date_local"\s*:\s*"([^"]+)"/.exec(decoded) ??
+		/"start_date"\s*:\s*"([^"]+)"/.exec(decoded) ??
+		/"start_time"\s*:\s*"([^"]+)"/.exec(decoded);
+	if (jsonMatch?.[1]) return jsonMatch[1];
+	const attrMatch = /<time[^>]*\bdatetime\s*=\s*"([^"]+)"/i.exec(html);
+	return attrMatch?.[1] ?? undefined;
+}
+
 /** Find the index of the matching close character, respecting strings + nesting. */
 function findMatching(s: string, open: number, openCh: string, closeCh: string): number {
 	let depth = 0;
@@ -325,8 +361,15 @@ function toMediaRef(
 	raw: StravaMediaJson,
 	activity: ActivityRow,
 	indices: { photo: number; video: number },
+	activityStartTime: string | undefined,
 ): MediaRef | null {
 	const mediaType = raw.media_type === 2 ? 'video' : 'photo';
+	// Per-photo created_at_local wins over activity-level start time.
+	// `_local` is preferred because EXIF DateTimeOriginal has no TZ field
+	// and reads any timestamp as local time - matching local-clock
+	// semantics avoids photos showing as "off by 9 hours" in Apple Photos
+	// for activities recorded abroad.
+	const dateTimeOriginal = raw.created_at_local ?? raw.created_at ?? activityStartTime;
 
 	if (mediaType === 'video') {
 		const m3u8 = typeof raw.video === 'string' ? raw.video : '';
@@ -340,6 +383,7 @@ function toMediaRef(
 			lat: typeof raw.lat === 'number' ? raw.lat : undefined,
 			lng: typeof raw.lng === 'number' ? raw.lng : undefined,
 			caption: emptyToUndefined(raw.caption_escaped?.trim()),
+			dateTimeOriginal,
 			suggestedFilename: `${activity.id}/video-${String(indices.video + 1).padStart(2, '0')}.ts`,
 		};
 	}
@@ -357,6 +401,7 @@ function toMediaRef(
 		lat: typeof raw.lat === 'number' ? raw.lat : undefined,
 		lng: typeof raw.lng === 'number' ? raw.lng : undefined,
 		caption: emptyToUndefined(raw.caption_escaped?.trim()),
+		dateTimeOriginal,
 		suggestedFilename: `${activity.id}/photo-${String(indices.photo + 1).padStart(2, '0')}.${extensionFromUrl(url, 'jpg')}`,
 	};
 }
@@ -388,13 +433,18 @@ export async function discoverMediaForActivity(activity: ActivityRow, signal?: A
 	let raw = discoverMediaViaDom(html);
 	if (raw.length === 0) raw = discoverMediaViaRegex(html);
 
+	// Activity-level start time is used as a fallback for photos that
+	// don't carry their own `created_at`. We resolve it once per page,
+	// not once per photo, since the source HTML is identical.
+	const activityStartTime = extractActivityStartTime(html);
+
 	// Dedupe by photo_id/id so a JSON payload that includes a photo twice
 	// (lightbox + carousel buckets) doesn't double-fetch.
 	const seen = new Set<string>();
 	const refs: MediaRef[] = [];
 	const indices = { photo: 0, video: 0 };
 	for (const item of raw) {
-		const ref = toMediaRef(item, activity, indices);
+		const ref = toMediaRef(item, activity, indices, activityStartTime);
 		if (!ref) continue;
 		if (seen.has(ref.mediaId)) continue;
 		seen.add(ref.mediaId);
@@ -500,7 +550,7 @@ async function materializeBlob(res: FetchSuccess): Promise<Blob> {
  */
 async function fetchPhotoViaWorker(
 	url: string,
-	metadata: { lat?: number; lng?: number; caption?: string; activityName?: string },
+	metadata: { lat?: number; lng?: number; caption?: string; activityName?: string; dateTimeOriginal?: string },
 ): Promise<Blob> {
 	// Annotate at the declaration so typescript-eslint's no-unsafe-assignment
 	// is happy - bare `await chrome.runtime.sendMessage(…)` returns `any`,
@@ -650,6 +700,7 @@ export async function downloadBulkPhotos(
 									lng: item.lng,
 									caption: item.caption,
 									activityName,
+									dateTimeOriginal: item.dateTimeOriginal,
 								});
 					zip.file(sanitizeFilename(item.suggestedFilename), blob);
 					if (item.mediaType === 'video') videoCount++;

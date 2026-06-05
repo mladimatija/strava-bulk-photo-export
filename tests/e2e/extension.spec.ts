@@ -112,7 +112,10 @@ interface FixtureVideo {
 	lng?: number;
 	caption?: string;
 }
-function activityPageHtml(activityId: string, items: { photos?: FixturePhoto[]; videos?: FixtureVideo[] }): string {
+function activityPageHtml(
+	activityId: string,
+	items: { photos?: FixturePhoto[]; videos?: FixtureVideo[]; startDateLocal?: string },
+): string {
 	const photoObjs = (items.photos ?? []).map((p) => ({
 		photo_id: String(p.id),
 		id: p.id,
@@ -140,11 +143,14 @@ function activityPageHtml(activityId: string, items: { photos?: FixturePhoto[]; 
 		caption_escaped: v.caption ?? '',
 		dimensions: { large: { width: 1080, height: 1920 }, thumbnail: { width: 1080, height: 1920 } },
 	}));
-	const reactProps = {
+	const reactProps: Record<string, unknown> = {
 		photos: [...photoObjs, ...videoObjs],
 		viewableCount: photoObjs.length + videoObjs.length,
 		category: 'activity_detail',
 	};
+	if (items.startDateLocal !== undefined) {
+		reactProps.start_date_local = items.startDateLocal;
+	}
 	// HTML-encode the JSON the same way Strava does (quote characters become &quot;).
 	const propsAttr = JSON.stringify(reactProps).replace(/"/g, '&quot;');
 	return `<!doctype html><html><head><title>Photos | Strava</title></head><body>
@@ -1320,6 +1326,67 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		// Release the paused fetch so the route handler unblocks and the
 		// Playwright context doesn't leak a hanging request into the next test.
 		release();
+	});
+
+	// ---------- Coverage gap: DateTimeOriginal EXIF ----------
+	//
+	// Apple Photos / Lightroom rely on EXIF DateTimeOriginal to sort the
+	// photo timeline. The downloader now reads `start_date_local` out of
+	// the React-props blob (falling back to a per-photo `created_at` when
+	// Strava exposes it) and writes the EXIF date in the SW. Verifying
+	// the exact piexifjs output would need a JPEG parser in the test; we
+	// instead use the same byte-content harness that proved bytes
+	// round-trip and grep the zip for the EXIF date string, which
+	// piexifjs writes verbatim as "YYYY:MM:DD HH:MM:SS".
+	test('saved JPEG carries DateTimeOriginal EXIF from activity start_date_local', async ({ extensionPage }) => {
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'dto', largeUrl: `${cdn}/dto-2048x2048.jpg` }],
+					startDateLocal: '2024-05-14T10:30:00',
+				}),
+			});
+		});
+		// 4x4 white JPEG produced by sharp at quality 50. The 22-byte
+		// "JFIF + EOI" stub used elsewhere passes the success-status check
+		// but trips piexifjs.insert with "Wrong JPEG data" because there's
+		// no DQT/SOF/SOS structure to splice EXIF before - the injection
+		// then silently falls back to the original bytes. This 267-byte
+		// fixture has the canonical libjpeg DQT-first layout piexifjs
+		// expects, so the EXIF write actually lands and we can grep for it.
+		const sharpJpegBase64 =
+			'/9j/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAEAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKAAD//Z';
+		const realJpeg = Buffer.from(sharpJpegBase64, 'base64');
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: realJpeg });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+
+		const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+		const haystack = Buffer.from(zipBytes);
+		// `Software` is unconditionally written by injectExif, so if even
+		// that marker isn't present the whole EXIF block was dropped
+		// (e.g. piexifjs.insert failed and we fell back to the original
+		// bytes). Distinguishing "EXIF wrote but date is missing" from
+		// "EXIF didn't write at all" makes regressions easier to localise.
+		expect(haystack.includes(Buffer.from('Strava Bulk Photo Export', 'ascii')), 'EXIF Software tag present').toBe(true);
+		// piexifjs writes the EXIF DateTime fields as ASCII in the format
+		// "2024:05:14 10:30:00" - searchable byte-for-byte inside the zip
+		// because STORE compression preserves them verbatim.
+		expect(
+			haystack.includes(Buffer.from('2024:05:14 10:30:00', 'ascii')),
+			'EXIF DateTimeOriginal present in saved JPEG',
+		).toBe(true);
 	});
 });
 

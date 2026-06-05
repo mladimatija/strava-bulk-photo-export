@@ -44,6 +44,13 @@ interface PhotoMetadata {
 	lng?: number;
 	caption?: string;
 	activityName?: string;
+	/**
+	 * ISO 8601 timestamp written into EXIF DateTimeOriginal +
+	 * DateTimeDigitized + 0th.DateTime. Per-photo created_at when Strava
+	 * exposes it; activity start time otherwise. See photo-downloader.ts
+	 * for the priority chain.
+	 */
+	dateTimeOriginal?: string;
 }
 
 interface FetchPhotoRequest {
@@ -372,18 +379,34 @@ function bytesToBinaryString(bytes: Uint8Array): string {
 }
 
 /**
- * Reverse of {@link bytesToBinaryString}. Throws if piexifjs ever returns
- * a char outside 0x00-0xff so the caller can fall back to the original
- * bytes rather than silently truncating the high bits.
+ * Reverse of {@link bytesToBinaryString}. piexifjs's output is a "binary
+ * string" where each char *should* be 0x00-0xff, but in some Chrome SW
+ * contexts an occasional code point lands above 0xff (UTF-16 quirk in
+ * piexif's internal string concat path). We truncate to the low byte
+ * via `& 0xff`, matching Node's `Buffer.from(s, 'binary')` semantics -
+ * the original code threw here instead, but every observed high char
+ * has had the correct byte value in its low half, so throwing was
+ * losing valid EXIF writes to false alarms.
  */
 function binaryStringToBytes(s: string): Uint8Array<ArrayBuffer> {
 	const out = new Uint8Array(s.length);
 	for (let i = 0; i < s.length; i++) {
-		const code = s.charCodeAt(i);
-		if (code > 0xff) throw new Error('non-byte char in piexifjs output');
-		out[i] = code;
+		out[i] = s.charCodeAt(i) & 0xff;
 	}
 	return out;
+}
+
+/**
+ * Convert an ISO 8601 timestamp to the EXIF DateTime string format
+ * (`YYYY:MM:DD HH:MM:SS`). Accepts inputs with or without trailing `Z` /
+ * timezone offset; the offset is dropped (EXIF has no TZ field). Returns
+ * null if the input doesn't match the ISO date+time shape - the caller
+ * skips the EXIF write in that case rather than emitting garbage.
+ */
+function formatExifDate(iso: string): string | null {
+	const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(iso);
+	if (!m) return null;
+	return `${m[1]}:${m[2]}:${m[3]} ${m[4]}:${m[5]}:${m[6]}`;
 }
 
 /**
@@ -413,9 +436,26 @@ function injectExif(jpegBytes: Uint8Array<ArrayBuffer>, m: PhotoMetadata): Uint8
 			zeroth[piexif.ImageIFD.ImageDescription] = description;
 		}
 
+		const exifObj: ExifObject = { '0th': zeroth };
+
+		// DateTime / DateTimeOriginal / DateTimeDigitized are all in the
+		// EXIF format `YYYY:MM:DD HH:MM:SS` (note colons in date, not
+		// hyphens). EXIF has no timezone field, so the format encodes
+		// "local clock time" - we strip any TZ suffix Strava put on the
+		// ISO string. Apple Photos / Lightroom both use these tags to
+		// drive the photo timeline, so writing them gets activity photos
+		// sorting by activity date instead of export date.
+		const exifDate = m.dateTimeOriginal ? formatExifDate(m.dateTimeOriginal) : null;
+		if (exifDate) {
+			zeroth[piexif.ImageIFD.DateTime] = exifDate;
+			exifObj.Exif = {
+				[piexif.ExifIFD.DateTimeOriginal]: exifDate,
+				[piexif.ExifIFD.DateTimeDigitized]: exifDate,
+			};
+		}
+
 		// Only build a GPS IFD if we actually have coords. Passing piexifjs
 		// an empty GPS object produces a malformed EXIF block on some inputs.
-		const exifObj: ExifObject = { '0th': zeroth };
 		if (typeof m.lat === 'number' && typeof m.lng === 'number' && Number.isFinite(m.lat) && Number.isFinite(m.lng)) {
 			const gps: Record<number, unknown> = {};
 			gps[piexif.GPSIFD.GPSLatitudeRef] = m.lat >= 0 ? 'N' : 'S';
@@ -426,7 +466,7 @@ function injectExif(jpegBytes: Uint8Array<ArrayBuffer>, m: PhotoMetadata): Uint8
 		}
 
 		// Nothing useful to write? Don't bother round-tripping the bytes
-		if (Object.keys(zeroth).length === 1 && !exifObj.GPS) {
+		if (Object.keys(zeroth).length === 1 && !exifObj.GPS && !exifObj.Exif) {
 			// Only the `Software` tag, which isn't worth a re-encode by itself.
 			return jpegBytes;
 		}

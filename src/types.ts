@@ -34,6 +34,17 @@ export interface MediaRef {
 	lng?: number;
 	/** User-provided caption text - written into the JPEG's ImageDescription EXIF. */
 	caption?: string;
+	/**
+	 * Photo creation time as an ISO 8601 string (with or without trailing
+	 * Z / timezone offset). When present, written into the JPEG's
+	 * DateTimeOriginal / DateTimeDigitized / 0th.DateTime EXIF tags so
+	 * photo libraries (Apple Photos, Lightroom) sort by when the
+	 * activity happened rather than when the user exported. Strava
+	 * exposes this on a few different keys per page bucket - prefer
+	 * per-photo `created_at_local` / `created_at` when present, then fall
+	 * back to the activity-level `start_date_local` / `start_date`.
+	 */
+	dateTimeOriginal?: string;
 	/** Path inside the output zip, e.g. `18437723885/photo-01.jpg`. */
 	suggestedFilename: string;
 }
