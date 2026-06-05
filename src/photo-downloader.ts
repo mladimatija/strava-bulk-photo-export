@@ -417,28 +417,80 @@ export async function discoverPhotosForActivity(activity: ActivityRow): Promise<
 
 // ---------- Service-worker proxy helpers ----------
 
-interface FetchPhotoResponse {
+// Two-shape success envelope. `chrome.runtime.sendMessage` JSON-serializes
+// in MV3 (so typed arrays don't survive) AND caps a single message at
+// 64 MiB. The SW therefore inlines small payloads as base64 and hands
+// back a `transferId` for anything larger; we drain the bytes in chunks.
+interface FetchInlineSuccess {
 	ok: true;
-	kind: 'photo';
+	kind: 'photo' | 'video';
+	inline: true;
 	base64: string;
 	mimeType: string;
-	fetchedUrl: string;
 }
-interface FetchVideoResponse {
+interface FetchChunkedSuccess {
 	ok: true;
-	kind: 'video';
-	base64: string;
+	kind: 'photo' | 'video';
+	inline: false;
+	transferId: string;
+	totalBytes: number;
 	mimeType: string;
-	segmentCount: number;
 }
-type FetchResponse = FetchPhotoResponse | FetchVideoResponse | { ok: false; error: string };
+interface ReadChunkSuccess {
+	ok: true;
+	base64: string;
+	done: boolean;
+}
+type FetchSuccess = FetchInlineSuccess | FetchChunkedSuccess;
+type FetchResponse = FetchSuccess | { ok: false; error: string };
+type ReadChunkResponse = ReadChunkSuccess | { ok: false; error: string };
 
-/** Convert a base64 string back to a Blob for JSZip. */
-function base64ToBlob(base64: string, mimeType: string): Blob {
+/**
+ * Decode a base64 string to a Uint8Array, the inverse of bytesToBase64 in
+ * the SW. Pinned to `Uint8Array<ArrayBuffer>` so the result satisfies
+ * `Blob`'s `BufferSource` constraint under TS 6's stricter generics
+ * (which exclude `SharedArrayBuffer`-backed views from BlobPart).
+ */
+function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 	const binStr = atob(base64);
 	const bytes = new Uint8Array(binStr.length);
 	for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-	return new Blob([bytes], { type: mimeType });
+	return bytes;
+}
+
+/**
+ * Materialize a SW response into a Blob.
+ *
+ * Inline path: a single base64 decode → Blob. Chunked path: poll the SW
+ * for successive base64 chunks until `done`, then send a best-effort
+ * release message so the SW can free the bytes immediately rather than
+ * waiting for the TTL sweep.
+ */
+async function materializeBlob(res: FetchSuccess): Promise<Blob> {
+	if (res.inline) {
+		return new Blob([base64ToBytes(res.base64)], { type: res.mimeType });
+	}
+	const parts: Uint8Array<ArrayBuffer>[] = [];
+	let offset = 0;
+	let done = false;
+	while (!done) {
+		const chunk: ReadChunkResponse | undefined = await chrome.runtime.sendMessage({
+			type: 'sbpx-read-chunk',
+			transferId: res.transferId,
+			offset,
+		});
+		if (!chunk) throw new Error('Extension service worker unavailable - try reloading the page.');
+		if (!chunk.ok) throw new Error(chunk.error);
+		const bytes = base64ToBytes(chunk.base64);
+		parts.push(bytes);
+		offset += bytes.length;
+		done = chunk.done;
+	}
+	// The SW also self-releases when `done: true`, but on any abnormal
+	// path (caller threw mid-loop, etc.) the explicit release keeps SW
+	// memory clean. Fire-and-forget; failures here don't matter to the user.
+	void chrome.runtime.sendMessage({ type: 'sbpx-release-transfer', transferId: res.transferId });
+	return new Blob(parts, { type: res.mimeType });
 }
 
 /**
@@ -459,7 +511,7 @@ async function fetchPhotoViaWorker(
 	});
 	if (!res) throw new Error('Extension service worker unavailable - try reloading the page.');
 	if (!res.ok) throw new Error(res.error);
-	return base64ToBlob(res.base64, res.mimeType);
+	return await materializeBlob(res);
 }
 
 /**
@@ -473,7 +525,7 @@ async function fetchVideoViaWorker(masterUrl: string): Promise<Blob> {
 	});
 	if (!res) throw new Error('Extension service worker unavailable - try reloading the page.');
 	if (!res.ok) throw new Error(res.error);
-	return base64ToBlob(res.base64, res.mimeType);
+	return await materializeBlob(res);
 }
 
 // ---------- Bulk download orchestration ----------

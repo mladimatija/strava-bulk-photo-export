@@ -5,23 +5,30 @@
 // origin and DO honor host_permissions, so they can fetch the photo and
 // video CDNs without CORS interference.
 //
-// Two request shapes:
+// Two fetch request shapes:
 //
 //   { type: 'sbpx-fetch-photo', urlCandidates, metadata? }
 //      Try each URL in order; first 200 wins. If `metadata` is provided
 //      and the response is a JPEG, embed GPS + caption + activity name as
 //      EXIF before returning the bytes.
-//      Response: { ok: true, base64, mimeType, fetchedUrl }
 //
 //   { type: 'sbpx-fetch-video', masterUrl }
 //      Fetch an HLS master playlist, pick the highest-bandwidth variant,
 //      fetch all .ts segments, concatenate into a single MPEG-TS file.
 //      The output plays in VLC/mpv/QuickTime; remux to .mp4 losslessly
 //      with `ffmpeg -i file.ts -c copy file.mp4` if desired.
-//      Response: { ok: true, base64, mimeType: 'video/mp2t', segmentCount }
 //
-// All payloads round-trip as base64 strings because `chrome.runtime.sendMessage`
-// serializes to JSON and Blob/ArrayBuffer don't survive that.
+// Payloads are base64-encoded - `chrome.runtime.sendMessage` JSON-
+// serializes everything it transports in MV3, so typed arrays don't
+// survive the trip (they coerce to plain objects and the receiving Blob
+// constructor turns them into literal "[object Object]" strings). base64
+// is the only encoding that round-trips cleanly.
+//
+// `chrome.runtime.sendMessage` also caps a single message at 64 MiB. The
+// SW therefore inlines the base64 when the raw payload fits comfortably
+// under that ceiling, and otherwise hands back a `transferId` the content
+// script polls with `sbpx-read-chunk` to stream the bytes back in pieces.
+// See {@link TRANSFERS} below.
 
 import piexif from 'piexifjs';
 
@@ -48,42 +55,94 @@ interface FetchVideoRequest {
 	type: 'sbpx-fetch-video';
 	masterUrl: string;
 }
-type FetchRequest = FetchPhotoRequest | FetchVideoRequest;
+interface ReadChunkRequest {
+	type: 'sbpx-read-chunk';
+	transferId: string;
+	offset: number;
+}
+interface ReleaseTransferRequest {
+	type: 'sbpx-release-transfer';
+	transferId: string;
+}
+type IncomingRequest = FetchPhotoRequest | FetchVideoRequest | ReadChunkRequest | ReleaseTransferRequest;
 
-interface FetchPhotoSuccess {
+interface FetchPhotoInlineSuccess {
 	ok: true;
 	kind: 'photo';
+	inline: true;
 	base64: string;
 	mimeType: string;
 	fetchedUrl: string;
 }
-interface FetchVideoSuccess {
+interface FetchPhotoChunkedSuccess {
+	ok: true;
+	kind: 'photo';
+	inline: false;
+	transferId: string;
+	totalBytes: number;
+	mimeType: string;
+	fetchedUrl: string;
+}
+type FetchPhotoSuccess = FetchPhotoInlineSuccess | FetchPhotoChunkedSuccess;
+
+interface FetchVideoInlineSuccess {
 	ok: true;
 	kind: 'video';
+	inline: true;
 	base64: string;
 	mimeType: string;
 	segmentCount: number;
+}
+interface FetchVideoChunkedSuccess {
+	ok: true;
+	kind: 'video';
+	inline: false;
+	transferId: string;
+	totalBytes: number;
+	mimeType: string;
+	segmentCount: number;
+}
+type FetchVideoSuccess = FetchVideoInlineSuccess | FetchVideoChunkedSuccess;
+
+interface ReadChunkSuccess {
+	ok: true;
+	base64: string;
+	done: boolean;
+}
+interface ReleaseSuccess {
+	ok: true;
 }
 interface FetchFailure {
 	ok: false;
 	error: string;
 }
-type FetchResponse = FetchPhotoSuccess | FetchVideoSuccess | FetchFailure;
+type ResponseEnvelope = FetchPhotoSuccess | FetchVideoSuccess | ReadChunkSuccess | ReleaseSuccess | FetchFailure;
 
-function isFetchRequest(x: unknown): x is FetchRequest {
+function isIncomingRequest(x: unknown): x is IncomingRequest {
 	if (typeof x !== 'object' || x === null) return false;
-	const o = x as { type?: unknown };
-	return o.type === 'sbpx-fetch-photo' || o.type === 'sbpx-fetch-video';
+	const t = (x as { type?: unknown }).type;
+	return (
+		t === 'sbpx-fetch-photo' || t === 'sbpx-fetch-video' || t === 'sbpx-read-chunk' || t === 'sbpx-release-transfer'
+	);
 }
 
-chrome.runtime.onMessage.addListener((req: unknown, _sender, sendResponse: (resp: FetchResponse) => void) => {
-	if (!isFetchRequest(req)) return false;
+chrome.runtime.onMessage.addListener((req: unknown, _sender, sendResponse: (resp: ResponseEnvelope) => void) => {
+	if (!isIncomingRequest(req)) return false;
 	void (async () => {
 		try {
-			if (req.type === 'sbpx-fetch-photo') {
-				sendResponse(await handlePhotoFetch(req));
-			} else {
-				sendResponse(await handleVideoFetch(req));
+			switch (req.type) {
+				case 'sbpx-fetch-photo':
+					sendResponse(await handlePhotoFetch(req));
+					return;
+				case 'sbpx-fetch-video':
+					sendResponse(await handleVideoFetch(req));
+					return;
+				case 'sbpx-read-chunk':
+					sendResponse(handleReadChunk(req));
+					return;
+				case 'sbpx-release-transfer':
+					sendResponse(handleReleaseTransfer(req));
+					return;
 			}
 		} catch (e) {
 			sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
@@ -93,21 +152,175 @@ chrome.runtime.onMessage.addListener((req: unknown, _sender, sendResponse: (resp
 	return true;
 });
 
+// ---------- Chunked transfer state ----------
+
+/**
+ * Default per-message byte limit. `chrome.runtime.sendMessage` caps the
+ * payload at 64 MiB; base64 grows the byte count by 4/3, so 24 MiB raw
+ * comes out at ~32 MiB base64 - comfortably under the cap even with the
+ * envelope overhead.
+ */
+const DEFAULT_CHUNK_SIZE = 24 * 1024 * 1024;
+
+/**
+ * Lifetime of a held transfer after the SW hands out a `transferId`. Five
+ * minutes is plenty for a content script to drain even a slow chunked
+ * read; anything older is almost certainly leaked (content script gone /
+ * tab closed) and we drop the bytes to keep the SW from growing without
+ * bound across a long Strava session.
+ */
+const TRANSFER_TTL_MS = 5 * 60 * 1000;
+
+interface HeldTransfer {
+	bytes: Uint8Array;
+	mimeType: string;
+	expiresAt: number;
+}
+
+const TRANSFERS = new Map<string, HeldTransfer>();
+
+/**
+ * Allow tests to lower the chunk threshold so the chunked path can be
+ * exercised with a small fixture instead of a 24 MiB payload.
+ *
+ *   self.__sbpx_chunk_size_override = 256;
+ *
+ * Read at every response build so a test can flip it on, run, flip it off.
+ */
+function getChunkSize(): number {
+	const o = (globalThis as { __sbpx_chunk_size_override?: number }).__sbpx_chunk_size_override;
+	return typeof o === 'number' && o > 0 ? o : DEFAULT_CHUNK_SIZE;
+}
+
+function makeTransferId(): string {
+	return `sbpx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Build the right response envelope for a finished fetch. Inline if the
+ * bytes fit in one message; otherwise stash them under a new transferId
+ * for the content script to drain in chunks.
+ */
+function buildPhotoResponse(
+	bytes: Uint8Array,
+	mimeType: string,
+	fetchedUrl: string,
+): FetchPhotoInlineSuccess | FetchPhotoChunkedSuccess {
+	const chunkSize = getChunkSize();
+	if (bytes.length <= chunkSize) {
+		return { ok: true, kind: 'photo', inline: true, base64: bytesToBase64(bytes), mimeType, fetchedUrl };
+	}
+	const transferId = makeTransferId();
+	TRANSFERS.set(transferId, { bytes, mimeType, expiresAt: Date.now() + TRANSFER_TTL_MS });
+	scheduleTransferGc();
+	return { ok: true, kind: 'photo', inline: false, transferId, totalBytes: bytes.length, mimeType, fetchedUrl };
+}
+
+function buildVideoResponse(
+	bytes: Uint8Array,
+	mimeType: string,
+	segmentCount: number,
+): FetchVideoInlineSuccess | FetchVideoChunkedSuccess {
+	const chunkSize = getChunkSize();
+	if (bytes.length <= chunkSize) {
+		return { ok: true, kind: 'video', inline: true, base64: bytesToBase64(bytes), mimeType, segmentCount };
+	}
+	const transferId = makeTransferId();
+	TRANSFERS.set(transferId, { bytes, mimeType, expiresAt: Date.now() + TRANSFER_TTL_MS });
+	scheduleTransferGc();
+	return { ok: true, kind: 'video', inline: false, transferId, totalBytes: bytes.length, mimeType, segmentCount };
+}
+
+let gcScheduled = false;
+/**
+ * Periodically prune expired transfers. Cheap: O(map size) once a minute,
+ * and the map is empty whenever no large payload is in flight.
+ */
+function scheduleTransferGc(): void {
+	if (gcScheduled) return;
+	gcScheduled = true;
+	setTimeout(() => {
+		gcScheduled = false;
+		const now = Date.now();
+		for (const [id, t] of TRANSFERS) {
+			if (t.expiresAt <= now) TRANSFERS.delete(id);
+		}
+		if (TRANSFERS.size > 0) scheduleTransferGc();
+	}, 60 * 1000);
+}
+
+function handleReadChunk(req: ReadChunkRequest): ReadChunkSuccess | FetchFailure {
+	const transfer = TRANSFERS.get(req.transferId);
+	if (!transfer) return { ok: false, error: 'transfer expired or unknown' };
+	const chunkSize = getChunkSize();
+	const start = Math.max(0, req.offset);
+	const end = Math.min(start + chunkSize, transfer.bytes.length);
+	const slice = transfer.bytes.subarray(start, end);
+	const done = end >= transfer.bytes.length;
+	// Refresh TTL while the content script is actively draining.
+	transfer.expiresAt = Date.now() + TRANSFER_TTL_MS;
+	if (done) TRANSFERS.delete(req.transferId);
+	return { ok: true, base64: bytesToBase64(slice), done };
+}
+
+function handleReleaseTransfer(req: ReleaseTransferRequest): ReleaseSuccess {
+	TRANSFERS.delete(req.transferId);
+	return { ok: true };
+}
+
+// ---------- Network helpers ----------
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry on transient HTTP statuses (429 + 5xx) and network errors.
+ * 4xx responses pass straight through so the caller can try the next
+ * URL candidate (the bare → sized photo fallback relies on seeing 404s).
+ *
+ * Defaults: one retry, 500 ms initial backoff (1 s on attempt 2).
+ */
+async function fetchWithRetry(
+	url: string,
+	init?: RequestInit,
+	{ retries = 1, baseDelayMs = 500 }: { retries?: number; baseDelayMs?: number } = {},
+): Promise<Response> {
+	let lastErr: unknown = null;
+	for (let attempt = 0; attempt <= retries; attempt++) {
+		try {
+			const res = await fetch(url, init);
+			if (!res.ok && (res.status === 429 || res.status >= 500) && attempt < retries) {
+				await sleep(baseDelayMs * 2 ** attempt);
+				continue;
+			}
+			return res;
+		} catch (e) {
+			lastErr = e;
+			if (attempt < retries) {
+				await sleep(baseDelayMs * 2 ** attempt);
+				continue;
+			}
+			throw e;
+		}
+	}
+	throw lastErr instanceof Error ? lastErr : new Error('fetch failed');
+}
+
 // ---------- Photo fetch ----------
 
-async function handlePhotoFetch(req: FetchPhotoRequest): Promise<FetchResponse> {
+async function handlePhotoFetch(req: FetchPhotoRequest): Promise<ResponseEnvelope> {
 	let lastError = 'no candidates';
 	for (const url of req.urlCandidates) {
 		try {
-			const res = await fetch(url, { credentials: 'omit' });
+			const res = await fetchWithRetry(url, { credentials: 'omit' });
 			if (!res.ok) {
 				lastError = `HTTP ${res.status}`;
 				continue;
 			}
 			const blob = await res.blob();
 			const buf = await blob.arrayBuffer();
-			const bytes = new Uint8Array(buf);
-			let base64 = bytesToBase64(bytes);
+			let bytes = new Uint8Array(buf);
 			// Trust the server's MIME if it gave us a non-empty one; otherwise
 			// sniff the first 4 bytes; otherwise punt to octet-stream. We
 			// can't use `??` for blob.type because the fallback condition is
@@ -117,9 +330,9 @@ async function handlePhotoFetch(req: FetchPhotoRequest): Promise<FetchResponse> 
 			// Only attempt EXIF injection on real JPEGs. piexifjs silently
 			// produces a broken file if you hand it PNG/HEIC/etc.
 			if (req.metadata && isJpeg(bytes.subarray(0, 3))) {
-				base64 = injectExif(base64, req.metadata);
+				bytes = injectExif(bytes, req.metadata);
 			}
-			return { ok: true, kind: 'photo', base64, mimeType, fetchedUrl: url };
+			return buildPhotoResponse(bytes, mimeType, url);
 		} catch (e) {
 			lastError = e instanceof Error ? e.message : String(e);
 		}
@@ -141,25 +354,50 @@ function guessMimeFromBytes(firstBytes: Uint8Array): string | null {
 	return null;
 }
 
-/** base64 alphabet check used to validate piexifjs output. */
-const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+// ---------- EXIF injection ----------
 
 /**
- * Inject GPS + caption + software/description EXIF into a base64 JPEG.
- * Returns the rewritten base64 on success, or the original base64 if
- * anything goes wrong - we'd rather ship a photo without metadata than
- * lose the photo entirely.
- *
- * Implementation note: piexifjs supports two input shapes - data URLs
- * (`data:image/jpeg;base64,…`) and raw binary strings. The data-URL path
- * has been observed to occasionally return malformed output for some
- * Strava JPEGs (the resulting "data URL" carries chars that aren't valid
- * base64), which then makes the content script's `atob` call throw.
- * We use the binary-string round-trip here instead - it goes through
- * piexifjs's internal `atob`/`btoa` pair as a pure pipeline, and the
- * final `btoa` always produces clean base64.
+ * Encode a Uint8Array as a "binary string" - one JS char per byte, every
+ * char in 0x00-0xff. piexifjs operates on this representation internally.
+ * Chunked so `String.fromCharCode(...big)` doesn't blow Chrome's argument-
+ * count limit on multi-megabyte payloads.
  */
-function injectExif(jpegBase64: string, m: PhotoMetadata): string {
+function bytesToBinaryString(bytes: Uint8Array): string {
+	const chunkSize = 0x8000;
+	const parts: string[] = [];
+	for (let i = 0; i < bytes.length; i += chunkSize) {
+		parts.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+	}
+	return parts.join('');
+}
+
+/**
+ * Reverse of {@link bytesToBinaryString}. Throws if piexifjs ever returns
+ * a char outside 0x00-0xff so the caller can fall back to the original
+ * bytes rather than silently truncating the high bits.
+ */
+function binaryStringToBytes(s: string): Uint8Array<ArrayBuffer> {
+	const out = new Uint8Array(s.length);
+	for (let i = 0; i < s.length; i++) {
+		const code = s.charCodeAt(i);
+		if (code > 0xff) throw new Error('non-byte char in piexifjs output');
+		out[i] = code;
+	}
+	return out;
+}
+
+/**
+ * Inject GPS + caption + software/description EXIF into a JPEG. Returns
+ * the rewritten bytes on success, or the original bytes if anything goes
+ * wrong - we'd rather ship a photo without metadata than lose the photo
+ * entirely.
+ *
+ * piexifjs operates on binary strings (one JS char per byte). We translate
+ * to/from `Uint8Array` at the seam; the throw inside
+ * {@link binaryStringToBytes} catches any piexifjs output with multibyte
+ * chars and the surrounding try/catch falls back to the original bytes.
+ */
+function injectExif(jpegBytes: Uint8Array<ArrayBuffer>, m: PhotoMetadata): Uint8Array<ArrayBuffer> {
 	try {
 		const zeroth: Record<number, unknown> = {};
 		zeroth[piexif.ImageIFD.Software] = 'Strava Bulk Photo Export';
@@ -190,29 +428,23 @@ function injectExif(jpegBase64: string, m: PhotoMetadata): string {
 		// Nothing useful to write? Don't bother round-tripping the bytes
 		if (Object.keys(zeroth).length === 1 && !exifObj.GPS) {
 			// Only the `Software` tag, which isn't worth a re-encode by itself.
-			return jpegBase64;
+			return jpegBytes;
 		}
 
 		const exifBinary = piexif.dump(exifObj);
-		// Binary-string round-trip. piexifjs detects "no data URL prefix"
-		// and returns binary; we re-encode with btoa to guaranteed clean base64.
-		const jpegBinary = atob(jpegBase64);
+		const jpegBinary = bytesToBinaryString(jpegBytes);
 		const newJpegBinary = piexif.insert(exifBinary, jpegBinary);
-		const newBase64 = btoa(newJpegBinary);
-		// If the output isn't clean base64 (piexifjs quirk on
-		// malformed JPEGs), fall back to the original bytes so the photo
-		// still ships, just without EXIF.
-		return BASE64_RE.test(newBase64) ? newBase64 : jpegBase64;
+		return binaryStringToBytes(newJpegBinary);
 	} catch {
-		return jpegBase64;
+		return jpegBytes;
 	}
 }
 
 // ---------- HLS video fetch ----------
 
-async function handleVideoFetch(req: FetchVideoRequest): Promise<FetchResponse> {
+async function handleVideoFetch(req: FetchVideoRequest): Promise<ResponseEnvelope> {
 	const { bytes, segmentCount } = await fetchHls(req.masterUrl);
-	return { ok: true, kind: 'video', base64: bytesToBase64(bytes), mimeType: 'video/mp2t', segmentCount };
+	return buildVideoResponse(bytes, 'video/mp2t', segmentCount);
 }
 
 interface ParsedM3u8 {
@@ -263,8 +495,8 @@ function parseM3u8(text: string, baseUrl: string): ParsedM3u8 {
  * (VLC, mpv, QuickTime with the right extension) play this directly;
  * `ffmpeg -i out.ts -c copy out.mp4` is a lossless remux to MP4.
  */
-async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array; segmentCount: number }> {
-	const firstRes = await fetch(initialUrl, { credentials: 'omit' });
+async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array<ArrayBuffer>; segmentCount: number }> {
+	const firstRes = await fetchWithRetry(initialUrl, { credentials: 'omit' });
 	if (!firstRes.ok) throw new Error(`HTTP ${firstRes.status}`);
 	const firstText = await firstRes.text();
 	let parsed = parseM3u8(firstText, initialUrl);
@@ -272,7 +504,7 @@ async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array; segmen
 	if (parsed.variants.length > 0 && parsed.segments.length === 0) {
 		// Master playlist - resolve to a media playlist.
 		const best = parsed.variants.reduce((a, b) => (a.bandwidth >= b.bandwidth ? a : b));
-		const mediaRes = await fetch(best.url, { credentials: 'omit' });
+		const mediaRes = await fetchWithRetry(best.url, { credentials: 'omit' });
 		if (!mediaRes.ok) throw new Error(`HTTP ${mediaRes.status}`);
 		const mediaText = await mediaRes.text();
 		parsed = parseM3u8(mediaText, best.url);
@@ -287,7 +519,7 @@ async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array; segmen
 	// need to speed this up, batch into a concurrency-limited Promise.all().
 	const chunks: Uint8Array[] = [];
 	for (const url of parsed.segments) {
-		const res = await fetch(url, { credentials: 'omit' });
+		const res = await fetchWithRetry(url, { credentials: 'omit' });
 		if (!res.ok) throw new Error(`segment HTTP ${res.status}`);
 		const buf = await res.arrayBuffer();
 		chunks.push(new Uint8Array(buf));
@@ -309,10 +541,6 @@ async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array; segmen
  * Encode a Uint8Array as base64 using `btoa` on a binary string. We chunk
  * the conversion because `String.fromCharCode(...verylargearray)` blows
  * Chrome's argument-count limit on multi-megabyte payloads.
- *
- * Takes a Uint8Array (not an ArrayBuffer) so callers don't have to deal
- * with the ArrayBuffer / SharedArrayBuffer split that `TypedArray.buffer`
- * now exposes under modern lib.dom.d.ts.
  */
 function bytesToBase64(bytes: Uint8Array): string {
 	const chunkSize = 0x8000;
