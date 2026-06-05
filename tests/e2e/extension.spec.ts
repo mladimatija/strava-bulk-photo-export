@@ -1264,6 +1264,63 @@ test.describe('Strava Bulk Photo Export extension', () => {
 			delete (globalThis as { __sbpx_chunk_size_override?: number }).__sbpx_chunk_size_override;
 		});
 	});
+
+	// ---------- Coverage gap: Cancel button ----------
+	//
+	// The Cancel button is hidden when idle, shown while a bulk run is in
+	// flight, and aborts the run on click. The downloader checks the abort
+	// signal at every safe boundary (between activities during discovery,
+	// between items during download) and throws an AbortError - which the
+	// content script surfaces as warn-kind "Cancelled.".
+	//
+	// We pause the photo CDN with a deferred Promise so the run can't
+	// finish before the cancel click lands; then we resolve the Promise
+	// in the cleanup path so the route handler doesn't leak.
+	test('Cancel button aborts an in-flight run and lands on "Cancelled."', async ({ extensionPage }) => {
+		// Pause the activity HTML fetch (the discovery phase). The
+		// content script's discoverMediaForActivity uses `fetch(url,
+		// { signal })`, so AbortController.abort() interrupts the
+		// in-flight request directly - whereas pausing the photo CDN
+		// would block downloadBulkPhotos inside fetchPhotoViaWorker
+		// (which goes through chrome.runtime.sendMessage; no signal
+		// threads into the SW) and the cancel wouldn't land until the
+		// in-flight item completed.
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		let release: () => void = () => {};
+		const releasing = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await releasing;
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: '<!doctype html><html><body></body></html>',
+			});
+		});
+
+		// Cancel button is hidden when idle (sanity check before we start).
+		const cancelBtn = extensionPage.locator('.sbpx-toolbar-list [data-role="cancel"]');
+		await expect(cancelBtn).toBeHidden();
+
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Once busy, cancel becomes visible.
+		await expect(cancelBtn).toBeVisible();
+		await cancelBtn.click();
+
+		// AbortError lands on warn-kind "Cancelled." status.
+		const status = extensionPage.locator('[data-role="status"][data-kind="warn"] [data-role="status-text"]');
+		await expect(status).toHaveText('Cancelled.');
+
+		// And the button is hidden again once the run resolves.
+		await expect(cancelBtn).toBeHidden();
+
+		// Release the paused fetch so the route handler unblocks and the
+		// Playwright context doesn't leak a hanging request into the next test.
+		release();
+	});
 });
 
 /**

@@ -44,6 +44,8 @@ export type MessageKey =
 	| 'noPhotosFound'
 	| 'noMediaFound'
 	| 'downloadFailed'
+	| 'cancel'
+	| 'cancelled'
 	| 'koFiTitle';
 
 /**
@@ -71,6 +73,8 @@ const EN_FALLBACK: Record<MessageKey, string> = {
 	noPhotosFound: 'No photos found in the selected activities.',
 	noMediaFound: 'No photos or videos found in the selected activities.',
 	downloadFailed: 'Failed: $1',
+	cancel: 'Cancel',
+	cancelled: 'Cancelled.',
 	koFiTitle: 'Buy Me a Coffee at ko-fi.com',
 };
 

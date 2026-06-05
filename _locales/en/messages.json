@@ -102,6 +102,14 @@
 			"reason": { "content": "$1", "example": "Network error" }
 		}
 	},
+	"cancel": {
+		"message": "Cancel",
+		"description": "Label on the cancel button that appears next to the bulk button while a run is in flight."
+	},
+	"cancelled": {
+		"message": "Cancelled.",
+		"description": "Terminal status when the user cancels a bulk run via the Cancel button."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com",
 		"description": "Hover tooltip on the Ko-fi support button in the toolbar. Keep 'Ko-fi' as a proper noun."

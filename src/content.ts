@@ -55,6 +55,13 @@ interface State {
 	 * for the one implicitly selected activity.
 	 */
 	singleActivity: ActivityRow | null;
+	/**
+	 * Controller for the in-flight bulk run, or null when idle. Set at the
+	 * start of runPhotoDownload, cleared in its finally. The Cancel button
+	 * calls `.abort()` on this; downloadBulkPhotos throws an AbortError at
+	 * the next safe boundary and the catch surfaces "Cancelled." status.
+	 */
+	currentRun: AbortController | null;
 }
 
 const STATE: State = {
@@ -63,6 +70,7 @@ const STATE: State = {
 	busy: false,
 	includeVideos: false,
 	singleActivity: null,
+	currentRun: null,
 };
 
 // ---------- DOM discovery ----------
@@ -319,6 +327,9 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
 	const bulkBtnHtml = `<button class="sbpx-btn sbpx-btn-primary" data-role="bulk" ${
 		mode === 'list' ? 'disabled' : ''
 	}>${escapeHtml(t('downloadSelected'))}</button>`;
+	// Cancel sits directly next to the bulk button so the relationship is
+	// obvious. Hidden until STATE.busy turns on (see renderToolbarCounts).
+	const cancelBtnHtml = `<button class="sbpx-btn sbpx-btn-cancel" data-role="cancel" hidden>${escapeHtml(t('cancel'))}</button>`;
 	const countHtml =
 		mode === 'list'
 			? `<span class="sbpx-tool sbpx-count" data-role="count">${escapeHtml(t('selectedCount', '0'))}</span>`
@@ -363,8 +374,8 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
       </a>`;
 	toolbar.innerHTML =
 		mode === 'list'
-			? `${selectAllHtml}${includeVideosHtml}${bulkBtnHtml}${countHtml}${statusHtml}${spacerHtml}${kofiHtml}`
-			: `${bulkBtnHtml}${includeVideosHtml}${spacerHtml}${statusHtml}`;
+			? `${selectAllHtml}${includeVideosHtml}${bulkBtnHtml}${cancelBtnHtml}${countHtml}${statusHtml}${spacerHtml}${kofiHtml}`
+			: `${bulkBtnHtml}${cancelBtnHtml}${includeVideosHtml}${spacerHtml}${statusHtml}`;
 
 	const selectAll = toolbar.querySelector<HTMLInputElement>('.sbpx-select-all-cb');
 	if (selectAll) {
@@ -393,6 +404,14 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
 
 	const bulkBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="bulk"]')!;
 	bulkBtn.addEventListener('click', handleBulkClick);
+
+	const cancelBtn = toolbar.querySelector<HTMLButtonElement>('[data-role="cancel"]')!;
+	cancelBtn.addEventListener('click', () => {
+		// abort() on the run controller; downloadBulkPhotos throws an
+		// AbortError at the next safe boundary. The button stays visible
+		// until renderToolbarCounts() flips it back on STATE.busy → false.
+		STATE.currentRun?.abort();
+	});
 
 	return toolbar;
 }
@@ -461,6 +480,11 @@ function syncKofiVisibility(): void {
 function renderToolbarCounts(): void {
 	if (!STATE.toolbar) return;
 	const bulkBtn = STATE.toolbar.querySelector<HTMLButtonElement>('[data-role="bulk"]')!;
+	const cancelBtn = STATE.toolbar.querySelector<HTMLButtonElement>('[data-role="cancel"]')!;
+	// Cancel is busy-driven in both modes - the relationship is the same
+	// regardless of whether the toolbar tracks a selection or an implicit
+	// activity. Hidden when idle; revealed while a run is in flight.
+	cancelBtn.hidden = !STATE.busy;
 	if (STATE.toolbar.dataset.sbpxMode === 'single') {
 		// Single-activity mode: bulk is always available, just gated on busy.
 		// No select-all / count to keep in sync.
@@ -579,12 +603,15 @@ function collectSelectedActivities(): ActivityRow[] {
 async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 	if (activities.length === 0) return;
 	const includeVideos = STATE.includeVideos;
+	const controller = new AbortController();
 	STATE.busy = true;
+	STATE.currentRun = controller;
 	renderToolbarCounts();
 	setStatus(t('preparingDownloads', String(activities.length)), 'info', { spinner: true });
 	try {
 		const result = await downloadBulkPhotos(activities, {
 			includeVideos,
+			signal: controller.signal,
 			onProgress: (ev) => {
 				if (ev.stage === 'discovering') {
 					setStatus(t('preparingDownloads', String(ev.total)), 'info', { spinner: true });
@@ -615,10 +642,16 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 			}
 		}
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		setStatus(t('downloadFailed', message), 'err');
+		// AbortError is the user's own Cancel click - showing message with text "Cancelled."
+		if ((err as Error)?.name === 'AbortError') {
+			setStatus(t('cancelled'), 'warn');
+		} else {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(t('downloadFailed', message), 'err');
+		}
 	} finally {
 		STATE.busy = false;
+		STATE.currentRun = null;
 		setProgress(null);
 		renderToolbarCounts();
 	}

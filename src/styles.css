@@ -196,6 +196,12 @@
 	line-height: 1;
 }
 
+/* Cancel button uses the default secondary `.sbpx-btn` look (gray, dark-mode
+   variant inherited). */
+.sbpx-btn-cancel[hidden] {
+	display: none;
+}
+
 /* Ko-fi widget - uses the official kofi6.png asset (bundled as a data URL via
    scripts/build-kofi.js). The image already carries Ko-fi's brand styling,
    so we just need to render it cleanly. */
