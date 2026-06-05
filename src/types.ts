@@ -81,4 +81,12 @@ export interface DownloadOptions {
 	/** When true, include videos (HLS streams concatenated into one .ts file) alongside photos. */
 	includeVideos?: boolean;
 	onProgress?: ProgressCallback;
+	/**
+	 * Abort signal for cancelling a run in flight. When the signal fires
+	 * the downloader aborts at the next safe boundary (between activities
+	 * during discovery, between items during download) and throws a
+	 * DOMException with `name === 'AbortError'`. Already-saved bytes are
+	 * dropped (no partial zip emitted) - the caller can re-run to retry.
+	 */
+	signal?: AbortSignal;
 }

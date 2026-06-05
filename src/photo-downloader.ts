@@ -370,13 +370,14 @@ function toMediaRef(
  * HTTP / network errors throw; the caller treats per-activity discovery
  * failures as recoverable.
  */
-export async function discoverMediaForActivity(activity: ActivityRow): Promise<MediaRef[]> {
+export async function discoverMediaForActivity(activity: ActivityRow, signal?: AbortSignal): Promise<MediaRef[]> {
 	const url = `/activities/${activity.id}`;
 	dbg('fetch', url);
 	const res = await fetch(url, {
 		method: 'GET',
 		credentials: 'same-origin',
 		redirect: 'follow',
+		signal,
 	});
 	dbg('  status', res.status, 'final url', res.url);
 	const html = await res.text();
@@ -569,29 +570,50 @@ export interface BulkResultDetailed extends BulkResult {
  */
 export async function downloadBulkPhotos(
 	activities: ActivityRow[],
-	{ includeVideos = false, onProgress }: DownloadOptions = {},
+	{ includeVideos = false, onProgress, signal }: DownloadOptions = {},
 ): Promise<BulkResultDetailed> {
 	if (activities.length === 0) return { ok: 0, photos: 0, videos: 0, activities: 0, failed: [] };
 
-	// Phase 1: discover.
+	// Phase 1: discover. Parallel with a small concurrency cap and a
+	// pre-sized result array so the final order matches the user's row
+	// order in the table (which the per-activity directory naming inside
+	// the zip relies on). Per-activity errors stay silent so one 404 in
+	// a 50-activity run doesn't surface as a failure; AbortError from
+	// the signal does propagate.
 	onProgress?.({ stage: 'discovering', completed: 0, total: activities.length });
+	const perActivityItems: MediaRef[][] = new Array<MediaRef[]>(activities.length);
+	const discoverConcurrency = Math.min(3, activities.length);
+	let discoverCursor = 0;
+	let discovered = 0;
+	await Promise.all(
+		Array.from({ length: discoverConcurrency }, async () => {
+			while (discoverCursor < activities.length) {
+				signal?.throwIfAborted();
+				const i = discoverCursor++;
+				const activity = activities[i]!;
+				try {
+					const items = (await discoverMediaForActivity(activity, signal)).filter(
+						(m) => m.mediaType === 'photo' || includeVideos,
+					);
+					perActivityItems[i] = items;
+				} catch (e) {
+					if ((e as Error)?.name === 'AbortError') throw e;
+					perActivityItems[i] = [];
+				}
+				discovered++;
+				onProgress?.({ stage: 'discovering', completed: discovered, total: activities.length });
+			}
+		}),
+	);
+
 	const allMedia: MediaRef[] = [];
 	const contributingActivities = new Set<string>();
-	let discovered = 0;
-	for (const activity of activities) {
-		try {
-			const items = (await discoverMediaForActivity(activity)).filter((m) => m.mediaType === 'photo' || includeVideos);
-			if (items.length > 0) {
-				contributingActivities.add(activity.id);
-				allMedia.push(...items);
-			}
-		} catch {
-			// Per-activity discovery failures are silent here, so a single
-			// 404 or auth blip doesn't tank the whole run. If everything
-			//  fails, we'll surface "nothing found" terminally.
+	for (let i = 0; i < perActivityItems.length; i++) {
+		const items = perActivityItems[i] ?? [];
+		if (items.length > 0) {
+			contributingActivities.add(activities[i]!.id);
+			allMedia.push(...items);
 		}
-		discovered++;
-		onProgress?.({ stage: 'discovering', completed: discovered, total: activities.length });
 	}
 
 	if (allMedia.length === 0) {
@@ -615,6 +637,7 @@ export async function downloadBulkPhotos(
 	await Promise.all(
 		Array.from({ length: concurrency }, async () => {
 			while (cursor < total) {
+				signal?.throwIfAborted();
 				const i = cursor++;
 				const item = allMedia[i]!;
 				const activityName = activities.find((a) => a.id === item.activityId)?.name;
@@ -632,6 +655,7 @@ export async function downloadBulkPhotos(
 					if (item.mediaType === 'video') videoCount++;
 					else photoCount++;
 				} catch (e) {
+					if ((e as Error)?.name === 'AbortError') throw e;
 					const message = e instanceof Error ? e.message : String(e);
 					failed.push({ activityId: item.activityId, mediaUrl: item.url, reason: message });
 				}
@@ -641,6 +665,7 @@ export async function downloadBulkPhotos(
 		}),
 	);
 
+	signal?.throwIfAborted();
 	const successCount = total - failed.length;
 	if (successCount === 0) {
 		throw new Error(`All ${total} downloads failed. First error: ${failed[0]?.reason ?? 'unknown'}`);
