@@ -92,7 +92,7 @@
 .sbpx-status-text {
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
+	white-space: break-spaces;
 }
 .sbpx-status[data-kind='ok'] {
 	color: #1e8e3e;
@@ -127,6 +127,34 @@
 	to {
 		transform: rotate(360deg);
 	}
+}
+
+/* Inline progress bar - sits in the status area during the determinate
+   phases (discovering, downloading). Width is 80 px in list mode so it
+   fits next to the inline status text without pushing the spacer; single
+   mode lets it stretch a little further since the status owns its own row. */
+.sbpx-progress {
+	display: inline-block;
+	flex: none;
+	width: 80px;
+	height: 4px;
+	background: #d4d7dc;
+	border-radius: 2px;
+	overflow: hidden;
+	vertical-align: middle;
+}
+.sbpx-progress[hidden] {
+	display: none;
+}
+.sbpx-progress-bar {
+	display: block;
+	height: 100%;
+	width: 0%;
+	background: #fc4c02;
+	transition: width 120ms ease;
+}
+.sbpx-toolbar-single .sbpx-progress {
+	width: 120px;
 }
 
 .sbpx-spacer {
@@ -298,6 +326,9 @@ td.sbgx-cell-dl > .sbpx-btn-row-coexisting:only-child {
 		border-color: #3a3d42;
 		border-top-color: #fc4c02;
 	}
+	.sbpx-progress {
+		background: #3a3d42;
+	}
 	.sbpx-btn {
 		background: #2a2d33;
 		color: #f3f4f5;
@@ -368,6 +399,12 @@ body.dark .sbpx-spinner,
 [data-color-scheme='dark'] .sbpx-spinner {
 	border-color: #3a3d42;
 	border-top-color: #fc4c02;
+}
+html.dark .sbpx-progress,
+body.dark .sbpx-progress,
+[data-theme='dark'] .sbpx-progress,
+[data-color-scheme='dark'] .sbpx-progress {
+	background: #3a3d42;
 }
 html.dark .sbpx-btn,
 body.dark .sbpx-btn,

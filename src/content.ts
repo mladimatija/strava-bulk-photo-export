@@ -344,8 +344,17 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
 	// The single-mode flip also puts the primary action first (where the
 	// eye goes) and reduces the visual cost of the optional "Include videos"
 	// toggle on what is fundamentally a one-click flow.
+	// The progress bar sits between the spinner and the status text so the
+	// fill grows leftward-to-rightward right next to "Downloading 12 / 47…".
+	// `data-role="progress"` is the container; the inner bar's width is
+	// what setProgress() animates. Both start hidden; runPhotoDownload()
+	// shows them once a discovering / downloading event arrives, and the
+	// finally block hides them on terminal state.
 	const statusHtml = `<span class="sbpx-tool sbpx-status" data-role="status">
         <span class="sbpx-spinner" data-role="spinner" hidden></span>
+        <span class="sbpx-progress" data-role="progress" hidden>
+          <span class="sbpx-progress-bar" data-role="progress-bar"></span>
+        </span>
         <span class="sbpx-status-text" data-role="status-text"></span>
       </span>`;
 	const spacerHtml = '<span class="sbpx-spacer"></span>';
@@ -499,6 +508,25 @@ function setStatus(text: string, kind: StatusKind = '', { spinner = false }: { s
 }
 
 /**
+ * Update the toolbar progress bar.
+ *
+ * @param fraction  0..1 progress. Pass `null` to hide the bar (used for
+ *                  indeterminate phases like zipping, and on terminal state).
+ */
+function setProgress(fraction: number | null): void {
+	if (!STATE.toolbar) return;
+	const container = STATE.toolbar.querySelector<HTMLElement>('[data-role="progress"]')!;
+	if (fraction === null) {
+		container.hidden = true;
+		return;
+	}
+	const bar = container.querySelector<HTMLElement>('[data-role="progress-bar"]')!;
+	const clamped = Math.max(0, Math.min(1, fraction));
+	bar.style.width = `${(clamped * 100).toFixed(1)}%`;
+	container.hidden = false;
+}
+
+/**
  * Reflect STATE.selected onto every rendered checkbox. Important when two
  * rows share an id (sticky header mirror, etc.) - without this, checking one
  * would leave the duplicate visibly unchecked.
@@ -560,12 +588,16 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 			onProgress: (ev) => {
 				if (ev.stage === 'discovering') {
 					setStatus(t('preparingDownloads', String(ev.total)), 'info', { spinner: true });
+					setProgress(ev.total > 0 ? ev.completed / ev.total : null);
 				} else if (ev.stage === 'downloading') {
 					// Use the more general "items" copy when videos may be in the mix.
 					const key = includeVideos ? 'downloadingProgressMedia' : 'downloadingProgress';
 					setStatus(t(key, [String(ev.completed), String(ev.total)]), 'info', { spinner: true });
+					setProgress(ev.total > 0 ? ev.completed / ev.total : null);
 				} else if (ev.stage === 'zipping') {
 					setStatus(t('buildingZip'), 'info', { spinner: true });
+					// Zipping is indeterminate - drop the bar back to the spinner-only state.
+					setProgress(null);
 				}
 			},
 		});
@@ -587,6 +619,7 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 		setStatus(t('downloadFailed', message), 'err');
 	} finally {
 		STATE.busy = false;
+		setProgress(null);
 		renderToolbarCounts();
 	}
 }
