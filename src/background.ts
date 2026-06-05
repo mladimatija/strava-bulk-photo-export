@@ -514,16 +514,27 @@ async function fetchHls(initialUrl: string): Promise<{ bytes: Uint8Array<ArrayBu
 		throw new Error('no HLS segments found');
 	}
 
-	// Fetch all segments. Sequential for now - HLS segments are small
-	// (~6 s each), and the user-perceived wait is usually short. If we ever
-	// need to speed this up, batch into a concurrency-limited Promise.all().
-	const chunks: Uint8Array[] = [];
-	for (const url of parsed.segments) {
-		const res = await fetchWithRetry(url, { credentials: 'omit' });
-		if (!res.ok) throw new Error(`segment HTTP ${res.status}`);
-		const buf = await res.arrayBuffer();
-		chunks.push(new Uint8Array(buf));
-	}
+	// Fetch all segments in parallel with a small concurrency cap so a
+	// minute-long video at ~6 s segments doesn't pay 10× the round-trip
+	// time it has to. Pre-sized array + indexed writes preserve playback
+	// order regardless of completion order; a single shared cursor feeds
+	// the workers so we don't burn workers on already-claimed segments.
+	const totalSegments = parsed.segments.length;
+	const chunks: Uint8Array[] = new Array<Uint8Array>(totalSegments);
+	const segmentConcurrency = Math.min(4, totalSegments);
+	let segmentCursor = 0;
+	await Promise.all(
+		Array.from({ length: segmentConcurrency }, async () => {
+			while (segmentCursor < totalSegments) {
+				const i = segmentCursor++;
+				const url = parsed.segments[i]!;
+				const res = await fetchWithRetry(url, { credentials: 'omit' });
+				if (!res.ok) throw new Error(`segment HTTP ${res.status}`);
+				const buf = await res.arrayBuffer();
+				chunks[i] = new Uint8Array(buf);
+			}
+		}),
+	);
 	let total = 0;
 	for (const c of chunks) total += c.byteLength;
 	const merged = new Uint8Array(total);
