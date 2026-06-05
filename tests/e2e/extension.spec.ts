@@ -6,6 +6,12 @@ import { test, expect, SINGLE_FIXTURE_ACTIVITY_ID, type Page } from '../fixtures
 interface CapturedClick {
 	href: string;
 	download: string | null;
+	/**
+	 * For `blob:` hrefs, the bytes we read from the blob URL right after
+	 * the click fires. Populated asynchronously so callers should poll
+	 * for `bytes` to appear before reading it.
+	 */
+	bytes?: number[];
 }
 
 declare global {
@@ -36,10 +42,24 @@ async function installAnchorClickCapture(page: Page): Promise<void> {
 			(e: Event) => {
 				const target = e.target;
 				if (target instanceof HTMLAnchorElement) {
-					window.__sbpxClicks?.push({
-						href: target.href,
-						download: target.getAttribute('download'),
-					});
+					const href = target.href;
+					const download = target.getAttribute('download');
+					const idx = window.__sbpxClicks!.length;
+					window.__sbpxClicks!.push({ href, download });
+					// blob: URLs are revoked ~1 s after the click (the
+					// downloader's setTimeout). Fire the fetch synchronously
+					// in this handler so it starts before the revoke timer
+					// is scheduled; the receive can complete asynchronously.
+					if (href.startsWith('blob:')) {
+						void fetch(href)
+							.then((r) => r.arrayBuffer())
+							.then((buf) => {
+								window.__sbpxClicks![idx]!.bytes = Array.from(new Uint8Array(buf));
+							})
+							.catch(() => {
+								/* blob already revoked, etc - test will time out and surface that */
+							});
+					}
 					e.preventDefault();
 					e.stopImmediatePropagation();
 				}
@@ -52,6 +72,22 @@ async function installAnchorClickCapture(page: Page): Promise<void> {
 /** Read whatever {@link installAnchorClickCapture} captured. */
 async function readCapturedAnchorClicks(page: Page): Promise<CapturedClick[]> {
 	return page.evaluate(() => window.__sbpxClicks ?? []);
+}
+
+/**
+ * Wait for the bytes of the most recent `download="…zip"` click to settle,
+ * then return them as a Uint8Array. The downloader produces ZIPs with
+ * STORE compression, so the input bytes survive verbatim and the test
+ * can grep for fixture markers directly inside the zip payload.
+ */
+async function waitForZipBytes(page: Page, downloadName: string, timeoutMs = 5000): Promise<Uint8Array> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const click = (await readCapturedAnchorClicks(page)).find((c) => c.download === downloadName);
+		if (click?.bytes && click.bytes.length > 0) return new Uint8Array(click.bytes);
+		await page.waitForTimeout(50);
+	}
+	throw new Error(`Timed out waiting for bytes of download "${downloadName}"`);
 }
 
 /**
@@ -699,6 +735,60 @@ test.describe('Strava Bulk Photo Export extension', () => {
 			'Saved 2 photos from 2 activities.',
 		);
 		expect(videoFetched, 'no video CDN traffic when Include videos is off').toEqual([]);
+
+		// Progress bar finishes at 100% and then hides on terminal state. We
+		// can only inspect post-run (the bar advances fast against the test's
+		// mocked CDN), but the final width and hidden flag together pin the
+		// reset-on-finally behaviour.
+		const progress = extensionPage.locator('.sbpx-toolbar-list [data-role="progress"]');
+		await expect(progress).toBeHidden();
+	});
+
+	test('progress bar is visible during the downloading phase', async ({ extensionPage }) => {
+		// Block the photo CDN with a manually-resolved promise so the run
+		// stays in the 'downloading' stage long enough to observe the bar.
+		// Once we've seen it, release the photo fetch and let the run finish.
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'slow', largeUrl: `${cdn}/slow-2048x2048.jpg` }],
+				}),
+			});
+		});
+		// Deferred-resolve handle: TS can't see the resolver flowing back from
+		// inside the Promise executor, so we seed `release` with a no-op
+		// fallback (eslint-disable comment kept narrow to this one line).
+		// eslint-disable-next-line @typescript-eslint/no-empty-function
+		let release: () => void = () => {};
+		const releasing = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await releasing;
+			await route.fulfill({
+				status: 200,
+				contentType: 'image/jpeg',
+				body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+			});
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// While the CDN is paused the bar should be visible.
+		const progress = extensionPage.locator('.sbpx-toolbar-list [data-role="progress"]');
+		await expect(progress).toBeVisible();
+
+		// Release the fetch and let the run finish.
+		release();
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toHaveText(
+			'Saved 1 photos from 1 activities.',
+		);
+		await expect(progress).toBeHidden();
 	});
 
 	// Sanity check: the new fixture-level catch-all `/activities/*` route
@@ -1007,6 +1097,172 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		// crashed, the downloader would have surfaced a warn or err status.
 		const status = extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]');
 		await expect(status).toContainText('Saved 1 photos');
+	});
+
+	// ---------- Coverage gap: byte-content round-trip ----------
+	//
+	// The discovery + click assertions used to be the entire coverage; the
+	// e2e suite never actually decoded the saved bytes. That gap let a
+	// regression slip through where SW → content-script payloads got
+	// `JSON.stringify`-ed (via `chrome.runtime.sendMessage`), turning each
+	// photo into the literal string "[object Object]" inside the zip.
+	//
+	// This test serves a JPEG with a distinctive byte signature, drives a
+	// download, fetches the resulting blob URL, and asserts the marker
+	// appears verbatim in the zip bytes (STORE compression keeps them
+	// uncompressed). It also asserts "[object Object]" is NOT present -
+	// the exact signature of the historical regression.
+	test('saved zip contains the actual JPEG bytes, not "[object Object]"', async ({ extensionPage }) => {
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		// A 32-byte payload with a distinctive ASCII tag ("SBPX-ROUNDTRIP")
+		// embedded between the JPEG SOI and EOI markers. piexifjs will
+		// happily try to inject EXIF; even if the bytes shift slightly, the
+		// marker survives because the EXIF block is inserted between markers,
+		// not in place of payload.
+		const marker = 'SBPX-ROUNDTRIP';
+		const markerBytes = Array.from(marker, (c) => c.charCodeAt(0));
+		const pixelPayload = Buffer.from([
+			0xff,
+			0xd8, // SOI
+			0xff,
+			0xe0,
+			0x00,
+			0x10, // APP0 marker + length 16
+			0x4a,
+			0x46,
+			0x49,
+			0x46,
+			0x00, // 'JFIF\0'
+			0x01,
+			0x01,
+			0x00,
+			0x00,
+			0x01,
+			0x00,
+			0x01,
+			0x00,
+			0x00, // version + density
+			...markerBytes, // distinctive payload
+			0xff,
+			0xd9, // EOI
+		]);
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'rt', largeUrl: `${cdn}/rt-2048x2048.jpg` }],
+				}),
+			});
+		});
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: pixelPayload });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Once the terminal status reads "Saved", the zip blob URL is alive
+		// and the click-capture handler has already kicked off the fetch.
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+
+		const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+
+		// The marker survives verbatim somewhere in the zip's stored entry.
+		// We search byte-wise because the zip header sits before the payload.
+		const haystack = Buffer.from(zipBytes);
+		expect(haystack.includes(Buffer.from(marker, 'ascii')), 'distinctive JPEG marker present in zip').toBe(true);
+
+		// The historical [object Object] regression: stringified bytes
+		// produce that literal ASCII sequence in the file. If it appears in
+		// the zip, the SW response was JSON-serialized into garbage.
+		expect(haystack.includes(Buffer.from('[object Object]', 'ascii')), 'no stringified-object garbage in zip').toBe(
+			false,
+		);
+	});
+
+	// ---------- Coverage gap: chunked transfer path ----------
+	//
+	// Large videos historically failed with "Message exceeded maximum
+	// allowed size of 64MiB" because the SW returned the entire base64
+	// payload in one sendMessage call. The chunked transfer path holds
+	// bytes in the SW under a `transferId` and lets the content script
+	// drain them in pieces. Forcing the chunk size to a tiny value lets a
+	// modest test fixture exercise the path without needing a real
+	// 64+ MiB payload.
+	test('chunked transfer path returns the same bytes as the inline path', async ({ extensionPage, context }) => {
+		// Reach into the SW global to set the chunk-size override. The
+		// extension SW exposes `__sbpx_chunk_size_override` for exactly
+		// this purpose - see DEFAULT_CHUNK_SIZE in background.ts.
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		await sw!.evaluate(() => {
+			(globalThis as { __sbpx_chunk_size_override?: number }).__sbpx_chunk_size_override = 4;
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		const marker = 'SBPX-CHUNKED-PATH-FIXTURE-CONTENT';
+		const markerBytes = Array.from(marker, (c) => c.charCodeAt(0));
+		// 64+ bytes well above the 4-byte chunk threshold, with the marker
+		// near the middle so we exercise more than one chunk boundary.
+		const pixelPayload = Buffer.from([
+			0xff,
+			0xd8,
+			0xff,
+			0xe0,
+			0x00,
+			0x10,
+			0x4a,
+			0x46,
+			0x49,
+			0x46,
+			0x00,
+			0x01,
+			0x01,
+			0x00,
+			0x00,
+			0x01,
+			0x00,
+			0x01,
+			0x00,
+			0x00,
+			...markerBytes,
+			0xff,
+			0xd9,
+		]);
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'chunked', largeUrl: `${cdn}/chunked-2048x2048.jpg` }],
+				}),
+			});
+		});
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: pixelPayload });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+
+		const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+		const haystack = Buffer.from(zipBytes);
+		expect(haystack.includes(Buffer.from(marker, 'ascii')), 'distinctive marker survives chunked transfer').toBe(true);
+		expect(haystack.includes(Buffer.from('[object Object]', 'ascii'))).toBe(false);
+
+		// Clean up the SW override so it doesn't leak into subsequent tests.
+		await sw!.evaluate(() => {
+			delete (globalThis as { __sbpx_chunk_size_override?: number }).__sbpx_chunk_size_override;
+		});
 	});
 });
 
