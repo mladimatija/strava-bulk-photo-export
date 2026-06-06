@@ -1,16 +1,24 @@
-// Persistent "what we've already saved" record. Lets a bulk re-run skip
-// items the user has already downloaded - the difference between
-// starting a bulk photo export from zero every time and resuming from
-// where the last attempt left off.
+// Persistent storage for two kinds of state:
 //
-// Stored in `chrome.storage.local` (per-profile, per-extension, NOT
-// synced across devices). Bounded by a 30-day TTL: entries older than
-// that are pruned on every load, so the map can't grow without bound
-// across a long Strava lifetime. The mediaId is Strava's stable
-// `photo_id` / `id` for the media item, so a re-fetched page with the
-// same photo collapses to a no-op.
+//   1. Saved-history (chrome.storage.local). Records which mediaIds the
+//      user has already downloaded so a re-run can skip them. Local
+//      because it's a per-machine, per-profile bookkeeping artifact
+//      that has no meaning on another device.
+//
+//   2. Filename template (chrome.storage.sync). The pattern used to
+//      derive the path of each item inside the zip. Sync because it's
+//      a preference - if the user spends time getting
+//      "{date}/{sport}/{activity_name}-{index}.{ext}" right on their
+//      desktop, they shouldn't have to redo it on their laptop.
+//
+// Both layers gracefully no-op when `chrome.storage` is unavailable
+// (tests, dev contexts, an unexpected permission failure) - callers
+// treat that as "use defaults".
+
+import { DEFAULT_FILENAME_TEMPLATE } from './filename-template.ts';
 
 const STORAGE_KEY = 'sbpx_saved_v1';
+const TEMPLATE_KEY = 'sbpx_filename_template_v1';
 
 /** TTL for individual entries. Anything older is dropped on the next load. */
 const ENTRY_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -94,5 +102,53 @@ export async function resetSavedHistory(): Promise<void> {
 		await chrome.storage.local.remove(STORAGE_KEY);
 	} catch {
 		/* silent */
+	}
+}
+
+// ---------- Filename template ----------
+
+interface TemplateStoredShape {
+	[TEMPLATE_KEY]?: string;
+}
+
+/** True iff `chrome.storage.sync` is available in the current context. */
+function syncStorageAvailable(): boolean {
+	return typeof chrome !== 'undefined' && chrome.storage?.sync !== undefined;
+}
+
+/**
+ * Load the filename template the user configured on the options page,
+ * or {@link DEFAULT_FILENAME_TEMPLATE} when storage is unavailable /
+ * empty. Strings are trimmed on the way out so a stray trailing space
+ * doesn't accumulate as an empty filename component.
+ */
+export async function loadFilenameTemplate(): Promise<string> {
+	if (!syncStorageAvailable()) return DEFAULT_FILENAME_TEMPLATE;
+	try {
+		const got: TemplateStoredShape = await chrome.storage.sync.get(TEMPLATE_KEY);
+		const stored = got[TEMPLATE_KEY]?.trim();
+		return stored !== undefined && stored.length > 0 ? stored : DEFAULT_FILENAME_TEMPLATE;
+	} catch {
+		return DEFAULT_FILENAME_TEMPLATE;
+	}
+}
+
+/**
+ * Persist the user's filename template. Empty / whitespace-only input
+ * is treated as "reset to default" - it's the same result the user
+ * would get by manually clicking Reset and saves an extra round-trip.
+ */
+export async function saveFilenameTemplate(template: string): Promise<void> {
+	if (!syncStorageAvailable()) return;
+	try {
+		const trimmed = template.trim();
+		if (trimmed === '' || trimmed === DEFAULT_FILENAME_TEMPLATE) {
+			await chrome.storage.sync.remove(TEMPLATE_KEY);
+			return;
+		}
+		await chrome.storage.sync.set({ [TEMPLATE_KEY]: trimmed });
+	} catch {
+		/* silent - the options-page Save button surfaces this if the
+		   call somehow fails by the absence of a "Saved." confirmation. */
 	}
 }

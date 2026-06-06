@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "Ingenting nytt å lagre – alle valgte elementer er allerede i nedlastingene dine."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "Filnavnmal"
+	},
+	"optionsTemplateHelp": {
+		"message": "Banen hver fil får i zip-arkivet. Tilgjengelige plassholdere: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo eller video), {index}, {ext}. Bruk {index:N} for å endre antall sifre i null-utfyllingen."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Forhåndsvisning"
+	},
+	"optionsSave": {
+		"message": "Lagre"
+	},
+	"optionsReset": {
+		"message": "Tilbakestill til standard"
+	},
+	"optionsSavedConfirmation": {
+		"message": "Lagret."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

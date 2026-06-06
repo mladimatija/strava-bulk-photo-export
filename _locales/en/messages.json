@@ -127,6 +127,34 @@
 		"message": "Nothing new to save - every selected item is already in your downloads.",
 		"description": "Terminal status when the user ran a bulk download but every item was already saved in a previous run."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export",
+		"description": "Title of the extension's options page, shown in the tab and as the page heading."
+	},
+	"optionsTemplateLabel": {
+		"message": "Filename template",
+		"description": "Label above the filename-template input field on the options page."
+	},
+	"optionsTemplateHelp": {
+		"message": "Path each item takes inside the zip. Available placeholders: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo or video), {index}, {ext}. Use {index:N} to change the zero-pad width.",
+		"description": "Help text shown beneath the filename-template input on the options page, listing every supported placeholder."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Preview",
+		"description": "Label above the live preview of the rendered filename on the options page."
+	},
+	"optionsSave": {
+		"message": "Save",
+		"description": "Label on the Save button that persists the filename template on the options page."
+	},
+	"optionsReset": {
+		"message": "Reset to default",
+		"description": "Label on the button that clears the filename template back to the default pattern."
+	},
+	"optionsSavedConfirmation": {
+		"message": "Saved.",
+		"description": "Brief confirmation shown next to the Save button after a successful save."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com",
 		"description": "Hover tooltip on the Ko-fi support button in the toolbar. Keep 'Ko-fi' as a proper noun."

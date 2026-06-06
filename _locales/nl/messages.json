@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "Niets nieuws om op te slaan - elk geselecteerd item staat al in je downloads."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "Bestandsnaamsjabloon"
+	},
+	"optionsTemplateHelp": {
+		"message": "Pad dat elk item in de zip krijgt. Beschikbare plaatsaanduidingen: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo of video), {index}, {ext}. Gebruik {index:N} om de breedte van de nul-opvulling aan te passen."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Voorbeeld"
+	},
+	"optionsSave": {
+		"message": "Opslaan"
+	},
+	"optionsReset": {
+		"message": "Terugzetten naar standaard"
+	},
+	"optionsSavedConfirmation": {
+		"message": "Opgeslagen."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

@@ -15,7 +15,8 @@
 // into a single video file before sending bytes back.
 
 import JSZip from 'jszip';
-import { loadSavedMediaIds, markMediaIdsSaved } from './storage.ts';
+import { renderFilenameTemplate, type FilenameTemplateContext } from './filename-template.ts';
+import { loadFilenameTemplate, loadSavedMediaIds, markMediaIdsSaved } from './storage.ts';
 import type { ActivityRow, BulkResult, DownloadOptions, MediaRef } from './types.ts';
 
 // ---------- Debug logging seam ----------
@@ -375,6 +376,8 @@ function toMediaRef(
 	if (mediaType === 'video') {
 		const m3u8 = typeof raw.video === 'string' ? raw.video : '';
 		if (!m3u8 || !isVideoCdnUrl(m3u8)) return null;
+		const kindIndex = indices.video + 1;
+		const ext = 'ts';
 		return {
 			activityId: activity.id,
 			mediaId: String(raw.photo_id ?? raw.id ?? `v-${indices.video}`),
@@ -385,7 +388,9 @@ function toMediaRef(
 			lng: typeof raw.lng === 'number' ? raw.lng : undefined,
 			caption: emptyToUndefined(raw.caption_escaped?.trim()),
 			dateTimeOriginal,
-			suggestedFilename: `${activity.id}/video-${String(indices.video + 1).padStart(2, '0')}.ts`,
+			kindIndex,
+			ext,
+			suggestedFilename: `${activity.id}/video-${String(kindIndex).padStart(2, '0')}.${ext}`,
 		};
 	}
 
@@ -393,6 +398,8 @@ function toMediaRef(
 	// uploads; bigger on larger originals).
 	const url = (typeof raw.large === 'string' ? raw.large : raw.thumbnail) ?? '';
 	if (!url || !isPhotoCdnUrl(url)) return null;
+	const kindIndex = indices.photo + 1;
+	const ext = extensionFromUrl(url, 'jpg');
 	return {
 		activityId: activity.id,
 		mediaId: String(raw.photo_id ?? raw.id ?? `p-${indices.photo}`),
@@ -403,7 +410,9 @@ function toMediaRef(
 		lng: typeof raw.lng === 'number' ? raw.lng : undefined,
 		caption: emptyToUndefined(raw.caption_escaped?.trim()),
 		dateTimeOriginal,
-		suggestedFilename: `${activity.id}/photo-${String(indices.photo + 1).padStart(2, '0')}.${extensionFromUrl(url, 'jpg')}`,
+		kindIndex,
+		ext,
+		suggestedFilename: `${activity.id}/photo-${String(kindIndex).padStart(2, '0')}.${ext}`,
 	};
 }
 
@@ -600,6 +609,32 @@ function sanitizeFilename(name: string): string {
 	return trimmed !== '' ? trimmed : 'file';
 }
 
+/**
+ * Resolve a media item's path inside the zip via the user's filename
+ * template. Falls back to {@link MediaRef.suggestedFilename} when the
+ * template renders to an empty string (defensive against an all-
+ * unknown-placeholder template that the options page should have
+ * rejected anyway).
+ */
+function applyFilenameTemplate(template: string, item: MediaRef, activity: ActivityRow | undefined): string {
+	const dateTimeOriginal = item.dateTimeOriginal ?? '';
+	const ctx: FilenameTemplateContext = {
+		activityId: item.activityId,
+		activityName: activity?.name ?? '',
+		sport: activity?.sport_type ?? '',
+		date: dateTimeOriginal.slice(0, 10),
+		// EXIF DateTime format uses colons in time, which are illegal in
+		// most filesystems - swap colons for dashes so a user template
+		// like `{date_long}` doesn't produce an unsaveable path.
+		dateLong: dateTimeOriginal.replace(/[:T]/g, '-').slice(0, 19),
+		kind: item.mediaType,
+		index: item.kindIndex,
+		ext: item.ext,
+	};
+	const rendered = renderFilenameTemplate(template, ctx).trim();
+	return rendered !== '' ? rendered : item.suggestedFilename;
+}
+
 /** Final result of a bulk run, plus the counts split by media type. */
 export interface BulkResultDetailed extends BulkResult {
 	photos: number;
@@ -631,6 +666,11 @@ export async function downloadBulkPhotos(
 	// forceFresh is true we skip the storage read entirely so the bulk
 	// run touches no metadata at all.
 	const savedHistoryPromise: Promise<Set<string>> = forceFresh ? Promise.resolve(new Set()) : loadSavedMediaIds();
+	// The filename template lives in chrome.storage.sync. Load it in
+	// parallel with everything else; the value is rendered per-item just
+	// before the zip add so a misconfigured template doesn't make us
+	// drop fetched bytes on the floor.
+	const filenameTemplatePromise: Promise<string> = loadFilenameTemplate();
 
 	// Phase 1: discover. Parallel with a small concurrency cap and a
 	// pre-sized result array so the final order matches the user's row
@@ -669,6 +709,7 @@ export async function downloadBulkPhotos(
 	// but the await keeps the contract obvious - we never start
 	// downloading until we know what to skip.
 	const savedHistory = await savedHistoryPromise;
+	const filenameTemplate = await filenameTemplatePromise;
 
 	const allMedia: MediaRef[] = [];
 	const contributingActivities = new Set<string>();
@@ -720,7 +761,8 @@ export async function downloadBulkPhotos(
 				signal?.throwIfAborted();
 				const i = cursor++;
 				const item = allMedia[i]!;
-				const activityName = activities.find((a) => a.id === item.activityId)?.name;
+				const activity = activities.find((a) => a.id === item.activityId);
+				const activityName = activity?.name;
 				try {
 					const blob =
 						item.mediaType === 'video'
@@ -732,7 +774,7 @@ export async function downloadBulkPhotos(
 									activityName,
 									dateTimeOriginal: item.dateTimeOriginal,
 								});
-					zip.file(sanitizeFilename(item.suggestedFilename), blob);
+					zip.file(sanitizeFilename(applyFilenameTemplate(filenameTemplate, item, activity)), blob);
 					succeededItems.push({ mediaId: item.mediaId, activityId: item.activityId });
 					if (item.mediaType === 'video') videoCount++;
 					else photoCount++;

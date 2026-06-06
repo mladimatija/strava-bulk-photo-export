@@ -133,6 +133,11 @@ function isIncomingRequest(x: unknown): x is IncomingRequest {
 	);
 }
 
+// Clicking the extension's toolbar icon opens the options page.
+chrome.action.onClicked.addListener(() => {
+	void chrome.runtime.openOptionsPage();
+});
+
 chrome.runtime.onMessage.addListener((req: unknown, _sender, sendResponse: (resp: ResponseEnvelope) => void) => {
 	if (!isIncomingRequest(req)) return false;
 	void (async () => {

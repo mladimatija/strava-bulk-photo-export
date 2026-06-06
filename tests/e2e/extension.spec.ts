@@ -1533,6 +1533,128 @@ test.describe('Strava Bulk Photo Export extension', () => {
 			await chrome.storage.local.remove('sbpx_saved_v1');
 		});
 	});
+
+	// ---------- filename template ----------
+	//
+	// Filename template lives in chrome.storage.sync; the downloader
+	// renders {placeholder} substitutions against each MediaRef +
+	// activity context. We seed a custom template via the SW (same
+	// trick used by the saved-history tests), drive a download, fetch
+	// the zip bytes, and grep for the rendered path. ZIP central-
+	// directory entries store filenames as plain bytes so the path
+	// appears verbatim inside the buffer.
+	test('custom filename template renders into the zip entry path', async ({ extensionPage, context }) => {
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		// Template uses every fixture-controllable placeholder, so we can
+		// pin all of them with a single haystack search.
+		await sw!.evaluate(async () => {
+			await chrome.storage.sync.set({
+				sbpx_filename_template_v1: '{date}/{sport}/{activity_name}-{index:3}.{ext}',
+			});
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'tmpl-A', largeUrl: `${cdn}/tmpl-A-2048x2048.jpg` }],
+					startDateLocal: '2024-05-14T10:30:00',
+				}),
+			});
+		});
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+
+		const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+		const haystack = Buffer.from(zipBytes);
+		// Pin the high-leverage substrings rather than the full rendered
+		// path so the test stays robust to fixture row-name rewording.
+		// {date} resolves to "2024-05-14" (from startDateLocal),
+		// {index:3} to "001", and {ext} to "jpg" (from the CDN pathname).
+		// {sport} resolves to whatever the fixture's first-row first-td
+		// says - we don't pin that text.
+		expect(haystack.includes(Buffer.from('2024-05-14', 'utf8')), '{date} substitution present').toBe(true);
+		expect(haystack.includes(Buffer.from('-001.jpg', 'utf8')), '{index:3}.{ext} substitution present').toBe(true);
+		// And critically: the default template's hard-coded "photo-NN"
+		// path must NOT appear - if the template wasn't loaded, the zip
+		// would fall back to `{activity_id}/photo-01.jpg`.
+		expect(
+			haystack.includes(Buffer.from('photo-01.jpg', 'utf8')),
+			'default-template path absent (custom template applied)',
+		).toBe(false);
+
+		// Reset the template so subsequent tests aren't affected.
+		await sw!.evaluate(async () => {
+			await chrome.storage.sync.remove('sbpx_filename_template_v1');
+		});
+	});
+
+	test('options page loads, reads/writes chrome.storage.sync, and previews live', async ({
+		extensionPage,
+		context,
+	}) => {
+		// extensionPage is destructured so Chrome registers the SW (it
+		// only spins up after the content script runs on a real page).
+		// We don't otherwise interact with the page.
+		void extensionPage;
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		// Reach into the SW global to derive the extension id (the SW URL
+		// is `chrome-extension://<id>/...`) so the options page URL is
+		// addressable without hardcoding a build hash.
+		const swUrl = sw!.url();
+		const extensionId = new URL(swUrl).host;
+		const optionsUrl = `chrome-extension://${extensionId}/src/options.html`;
+
+		const optionsPage = await context.newPage();
+		await optionsPage.goto(optionsUrl);
+		await optionsPage.waitForSelector('[data-role="template-input"]');
+
+		const input = optionsPage.locator('[data-role="template-input"]');
+		const preview = optionsPage.locator('[data-role="template-preview"]');
+
+		// Default state: input shows the default template, preview
+		// renders against the fixed PREVIEW_CTX.
+		await expect(input).toHaveValue('{activity_id}/{kind}-{index}.{ext}');
+		await expect(preview).toHaveText('18437723885/photo-01.jpg');
+
+		// Edit the template; preview updates without needing a save.
+		await input.fill('{date}/{sport}/{kind}-{index:3}.{ext}');
+		await expect(preview).toHaveText('2024-05-14/Run/photo-001.jpg');
+
+		// Save persists to chrome.storage.sync.
+		await optionsPage.locator('[data-role="save"]').click();
+		await expect(optionsPage.locator('[data-role="saved-confirmation"]')).toBeVisible();
+
+		const stored = await sw!.evaluate(async () => {
+			const got = await chrome.storage.sync.get('sbpx_filename_template_v1');
+			return got.sbpx_filename_template_v1 as string | undefined;
+		});
+		expect(stored).toBe('{date}/{sport}/{kind}-{index:3}.{ext}');
+
+		// Reset clears the stored value (back to default).
+		await optionsPage.locator('[data-role="reset"]').click();
+		await expect(input).toHaveValue('{activity_id}/{kind}-{index}.{ext}');
+		const storedAfterReset = await sw!.evaluate(async () => {
+			const got = await chrome.storage.sync.get('sbpx_filename_template_v1');
+			return got.sbpx_filename_template_v1 as string | undefined;
+		});
+		expect(storedAfterReset).toBeUndefined();
+
+		await optionsPage.close();
+	});
 });
 
 /**

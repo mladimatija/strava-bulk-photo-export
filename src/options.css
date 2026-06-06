@@ -1,0 +1,159 @@
+/* Options page styles. Self-contained - the options page doesn't share
+   styles.css with the content-script toolbar because they run in
+   different contexts and the toolbar's CSS makes assumptions about
+   sitting inside Strava's chrome that don't hold here. */
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	font-size: 14px;
+	color: #2d3239;
+	background: #f6f7f8;
+}
+
+.sbpx-options {
+	max-width: 720px;
+	margin: 32px auto;
+	padding: 24px 32px;
+	background: #ffffff;
+	border: 1px solid #e0e3e8;
+	border-radius: 8px;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.sbpx-options-title {
+	margin: 0 0 24px;
+	font-size: 20px;
+	font-weight: 600;
+}
+
+.sbpx-options-form {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.sbpx-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.sbpx-field-label {
+	font-weight: 600;
+}
+
+.sbpx-field-input {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 13px;
+	padding: 8px 10px;
+	border: 1px solid #c4c8ce;
+	border-radius: 4px;
+	background: #ffffff;
+}
+
+.sbpx-field-input:focus {
+	outline: none;
+	border-color: #fc4c02;
+	box-shadow: 0 0 0 2px rgba(252, 76, 2, 0.2);
+}
+
+.sbpx-field-help {
+	color: #6d7177;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.sbpx-preview {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 13px;
+	padding: 8px 10px;
+	background: #f0f1f3;
+	border-radius: 4px;
+	color: #2d3239;
+	min-height: 1.4em;
+	display: block;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.sbpx-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 4px;
+}
+
+.sbpx-btn {
+	appearance: none;
+	border: 1px solid transparent;
+	border-radius: 4px;
+	padding: 7px 14px;
+	font: inherit;
+	cursor: pointer;
+	background: #f3f4f5;
+	color: #2d3239;
+	transition: background-color 80ms ease;
+}
+
+.sbpx-btn:hover:not(:disabled) {
+	background: #e7e9eb;
+}
+
+.sbpx-btn-primary {
+	background: #fc4c02;
+	color: #ffffff;
+	border-color: #e04500;
+	font-weight: 600;
+}
+
+.sbpx-btn-primary:hover:not(:disabled) {
+	background: #e04500;
+}
+
+.sbpx-saved-confirmation {
+	color: #1e8e3e;
+	font-weight: 500;
+}
+
+.sbpx-saved-confirmation[hidden] {
+	display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+	body {
+		background: #14171a;
+		color: #f3f4f5;
+	}
+	.sbpx-options {
+		background: #1c1f26;
+		border-color: #2e3138;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	}
+	.sbpx-field-input {
+		background: #14171a;
+		border-color: #3a3d42;
+		color: #f3f4f5;
+	}
+	.sbpx-field-help {
+		color: #9aa0a6;
+	}
+	.sbpx-preview {
+		background: #14171a;
+		color: #f3f4f5;
+	}
+	.sbpx-btn {
+		background: #2a2d33;
+		color: #f3f4f5;
+	}
+	.sbpx-btn:hover:not(:disabled) {
+		background: #353940;
+	}
+	.sbpx-saved-confirmation {
+		color: #4ade80;
+	}
+}

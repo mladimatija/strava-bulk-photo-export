@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "没有新内容可保存 - 选中的每一项都已在你的下载中。"
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "文件名模板"
+	},
+	"optionsTemplateHelp": {
+		"message": "每个项目在压缩包中的路径。可用占位符: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind}（photo 或 video）, {index}, {ext}。使用 {index:N} 修改补零位数。"
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "预览"
+	},
+	"optionsSave": {
+		"message": "保存"
+	},
+	"optionsReset": {
+		"message": "恢复默认"
+	},
+	"optionsSavedConfirmation": {
+		"message": "已保存。"
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

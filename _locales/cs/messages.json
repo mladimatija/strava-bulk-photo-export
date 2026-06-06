@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "Není co stáhnout – každá vybraná položka už je v tvých stažených souborech."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "Šablona názvu souboru"
+	},
+	"optionsTemplateHelp": {
+		"message": "Cesta, kterou každá položka zaujme v zip archivu. Dostupné zástupné symboly: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo nebo video), {index}, {ext}. Pomocí {index:N} změníš šířku doplnění nulami."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Náhled"
+	},
+	"optionsSave": {
+		"message": "Uložit"
+	},
+	"optionsReset": {
+		"message": "Obnovit výchozí"
+	},
+	"optionsSavedConfirmation": {
+		"message": "Uloženo."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

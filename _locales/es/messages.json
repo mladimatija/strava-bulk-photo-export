@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "Nada nuevo que guardar - cada elemento seleccionado ya está en tus descargas."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "Plantilla de nombre de archivo"
+	},
+	"optionsTemplateHelp": {
+		"message": "Ruta que toma cada elemento dentro del zip. Marcadores disponibles: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo o video), {index}, {ext}. Usa {index:N} para cambiar el ancho del relleno con ceros."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Vista previa"
+	},
+	"optionsSave": {
+		"message": "Guardar"
+	},
+	"optionsReset": {
+		"message": "Restablecer a valores predeterminados"
+	},
+	"optionsSavedConfirmation": {
+		"message": "Guardado."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

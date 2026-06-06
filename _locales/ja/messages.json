@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "新しく保存するものはありません - 選択したすべての項目はすでにダウンロード済みです。"
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "ファイル名テンプレート"
+	},
+	"optionsTemplateHelp": {
+		"message": "各項目がZIP内で使うパス。利用可能なプレースホルダー: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind}（photoまたはvideo）, {index}, {ext}。{index:N}で0埋めの幅を変更できます。"
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "プレビュー"
+	},
+	"optionsSave": {
+		"message": "保存"
+	},
+	"optionsReset": {
+		"message": "デフォルトにリセット"
+	},
+	"optionsSavedConfirmation": {
+		"message": "保存しました。"
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

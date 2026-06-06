@@ -49,6 +49,13 @@ export type MessageKey =
 	| 'forceFresh'
 	| 'savedWithSkippedHistory'
 	| 'allAlreadySaved'
+	| 'optionsTitle'
+	| 'optionsTemplateLabel'
+	| 'optionsTemplateHelp'
+	| 'optionsTemplatePreviewLabel'
+	| 'optionsSave'
+	| 'optionsReset'
+	| 'optionsSavedConfirmation'
 	| 'koFiTitle';
 
 /**
@@ -81,6 +88,14 @@ const EN_FALLBACK: Record<MessageKey, string> = {
 	forceFresh: 'Re-download everything',
 	savedWithSkippedHistory: 'Saved $1 photos from $2 activities ($3 already saved).',
 	allAlreadySaved: 'Nothing new to save - every selected item is already in your downloads.',
+	optionsTitle: 'Strava Bulk Photo Export',
+	optionsTemplateLabel: 'Filename template',
+	optionsTemplateHelp:
+		'Path each item takes inside the zip. Available placeholders: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo or video), {index}, {ext}. Use {index:N} to change the zero-pad width.',
+	optionsTemplatePreviewLabel: 'Preview',
+	optionsSave: 'Save',
+	optionsReset: 'Reset to default',
+	optionsSavedConfirmation: 'Saved.',
 	koFiTitle: 'Buy Me a Coffee at ko-fi.com',
 };
 

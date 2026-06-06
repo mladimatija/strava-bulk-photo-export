@@ -45,7 +45,25 @@ export interface MediaRef {
 	 * back to the activity-level `start_date_local` / `start_date`.
 	 */
 	dateTimeOriginal?: string;
-	/** Path inside the output zip, e.g. `18437723885/photo-01.jpg`. */
+	/**
+	 * 1-based counter within `mediaType` for this activity. Photos and
+	 * videos are numbered independently, so a mixed activity reads as
+	 * `photo-01.jpg, photo-02.jpg, video-01.ts` rather than interleaved.
+	 * Read by the filename-template renderer at zip-emit time.
+	 */
+	kindIndex: number;
+	/**
+	 * File extension (without a dot) for this item, e.g. "jpg" or "ts".
+	 * Snapshotted at discovery time so the template renderer doesn't
+	 * have to re-derive it from the CDN URL.
+	 */
+	ext: string;
+	/**
+	 * Fallback path used when filename-template rendering fails or when
+	 * a caller wants the default layout. The bulk downloader normally
+	 * runs the configured template here, but the field stays around so
+	 * the original behaviour is recoverable in tests and dev.
+	 */
 	suggestedFilename: string;
 }
 

@@ -158,6 +158,27 @@
 	"allAlreadySaved": {
 		"message": "Нет нового для сохранения - все выбранные элементы уже скачаны."
 	},
+	"optionsTitle": {
+		"message": "Strava Bulk Photo Export"
+	},
+	"optionsTemplateLabel": {
+		"message": "Шаблон имени файла"
+	},
+	"optionsTemplateHelp": {
+		"message": "Путь, который занимает каждый элемент в архиве zip. Доступные плейсхолдеры: {activity_id}, {activity_name}, {sport}, {date}, {date_long}, {kind} (photo или video), {index}, {ext}. Используйте {index:N}, чтобы изменить ширину дополнения нулями."
+	},
+	"optionsTemplatePreviewLabel": {
+		"message": "Предпросмотр"
+	},
+	"optionsSave": {
+		"message": "Сохранить"
+	},
+	"optionsReset": {
+		"message": "Сбросить к значениям по умолчанию"
+	},
+	"optionsSavedConfirmation": {
+		"message": "Сохранено."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

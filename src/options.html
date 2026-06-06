@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Strava Bulk Photo Export</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="stylesheet" href="./options.css" />
+	</head>
+	<body>
+		<main class="sbpx-options">
+			<h1 class="sbpx-options-title" data-i18n="optionsTitle">Strava Bulk Photo Export</h1>
+			<form class="sbpx-options-form" autocomplete="off">
+				<label class="sbpx-field">
+					<span class="sbpx-field-label" data-i18n="optionsTemplateLabel">Filename template</span>
+					<input
+						type="text"
+						class="sbpx-field-input"
+						data-role="template-input"
+						spellcheck="false"
+						autocapitalize="off"
+					/>
+					<span class="sbpx-field-help" data-i18n="optionsTemplateHelp"></span>
+				</label>
+
+				<div class="sbpx-field">
+					<span class="sbpx-field-label" data-i18n="optionsTemplatePreviewLabel">Preview</span>
+					<code class="sbpx-preview" data-role="template-preview"></code>
+				</div>
+
+				<div class="sbpx-actions">
+					<button type="submit" class="sbpx-btn sbpx-btn-primary" data-role="save" data-i18n="optionsSave">Save</button>
+					<button type="button" class="sbpx-btn" data-role="reset" data-i18n="optionsReset">Reset to default</button>
+					<span class="sbpx-saved-confirmation" data-role="saved-confirmation" hidden></span>
+				</div>
+			</form>
+		</main>
+		<script type="module" src="./options.ts"></script>
+	</body>
+</html>
