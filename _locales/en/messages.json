@@ -110,6 +110,23 @@
 		"message": "Cancelled.",
 		"description": "Terminal status when the user cancels a bulk run via the Cancel button."
 	},
+	"forceFresh": {
+		"message": "Re-download everything",
+		"description": "Label for the toolbar checkbox that bypasses the saved-history filter. Off by default; on means fetch every selected item even if previous runs already saved it."
+	},
+	"savedWithSkippedHistory": {
+		"message": "Saved $COUNT$ photos from $ACTIVITIES$ activities ($SKIPPED$ already saved).",
+		"description": "Terminal success message when at least one item was skipped because a previous run already saved it.",
+		"placeholders": {
+			"count": { "content": "$1", "example": "12" },
+			"activities": { "content": "$2", "example": "5" },
+			"skipped": { "content": "$3", "example": "47" }
+		}
+	},
+	"allAlreadySaved": {
+		"message": "Nothing new to save - every selected item is already in your downloads.",
+		"description": "Terminal status when the user ran a bulk download but every item was already saved in a previous run."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com",
 		"description": "Hover tooltip on the Ko-fi support button in the toolbar. Keep 'Ko-fi' as a proper noun."

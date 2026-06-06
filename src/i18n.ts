@@ -46,6 +46,9 @@ export type MessageKey =
 	| 'downloadFailed'
 	| 'cancel'
 	| 'cancelled'
+	| 'forceFresh'
+	| 'savedWithSkippedHistory'
+	| 'allAlreadySaved'
 	| 'koFiTitle';
 
 /**
@@ -75,6 +78,9 @@ const EN_FALLBACK: Record<MessageKey, string> = {
 	downloadFailed: 'Failed: $1',
 	cancel: 'Cancel',
 	cancelled: 'Cancelled.',
+	forceFresh: 'Re-download everything',
+	savedWithSkippedHistory: 'Saved $1 photos from $2 activities ($3 already saved).',
+	allAlreadySaved: 'Nothing new to save - every selected item is already in your downloads.',
 	koFiTitle: 'Buy Me a Coffee at ko-fi.com',
 };
 

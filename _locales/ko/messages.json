@@ -129,6 +129,35 @@
 			}
 		}
 	},
+	"cancel": {
+		"message": "취소"
+	},
+	"cancelled": {
+		"message": "취소되었습니다."
+	},
+	"forceFresh": {
+		"message": "모두 다시 다운로드"
+	},
+	"savedWithSkippedHistory": {
+		"message": "활동 $ACTIVITIES$개에서 사진 $COUNT$장 저장 (이미 저장된 $SKIPPED$장 제외).",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			},
+			"skipped": {
+				"content": "$3",
+				"example": "47"
+			}
+		}
+	},
+	"allAlreadySaved": {
+		"message": "새로 저장할 항목이 없습니다 - 선택한 모든 항목이 이미 다운로드되었습니다."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

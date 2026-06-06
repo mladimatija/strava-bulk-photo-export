@@ -66,6 +66,13 @@ export interface BulkResult {
 	activities: number;
 	/** Per-media failures, in completion order. */
 	failed: BulkFailure[];
+	/**
+	 * Count of media items skipped because a previous run already saved
+	 * them (`chrome.storage.local` history). Always 0 when forceFresh is
+	 * true. Surface in the UI so the user can tell "Saved 3 (skipped 47
+	 * already in your downloads)" from "Saved 50".
+	 */
+	skippedHistory: number;
 }
 
 /**
@@ -100,4 +107,12 @@ export interface DownloadOptions {
 	 * dropped (no partial zip emitted) - the caller can re-run to retry.
 	 */
 	signal?: AbortSignal;
+	/**
+	 * When true, re-download items previously marked saved in
+	 * chrome.storage.local. Default false: items the user already has
+	 * are silently skipped, which makes a re-run pick up where the
+	 * last attempt left off. The skipped-count is reported back in
+	 * BulkResult.skippedHistory.
+	 */
+	forceFresh?: boolean;
 }

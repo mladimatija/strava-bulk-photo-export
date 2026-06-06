@@ -50,6 +50,12 @@ interface State {
 	/** Mirrors the "Include videos" toolbar checkbox so per-row clicks honor it too. */
 	includeVideos: boolean;
 	/**
+	 * When off (the default) the bulk run skips media items the user has
+	 * already saved in a previous session via chrome.storage.local history.
+	 * When on the saved-history filter is bypassed.
+	 */
+	forceFresh: boolean;
+	/**
 	 * When mounted on `/activities/<id>`, the activity whose page we're on.
 	 * Null in list mode. Read by handleBulkClick to drive the download flow
 	 * for the one implicitly selected activity.
@@ -69,6 +75,7 @@ const STATE: State = {
 	toolbar: null,
 	busy: false,
 	includeVideos: false,
+	forceFresh: false,
 	singleActivity: null,
 	currentRun: null,
 };
@@ -324,6 +331,15 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
         <input type="checkbox" class="sbpx-include-videos-cb" data-role="include-videos" />
         <span>${escapeHtml(t('includeVideos'))}</span>
       </label>`;
+	// "Re-download everything" bypasses the saved-history filter that
+	// would otherwise skip items the user has already saved. Off by
+	// default so a re-run picks up where the last attempt left off;
+	// users who want a fresh export tick this. Visually mirrors the
+	// Include-videos checkbox so the toggles cluster as a group.
+	const forceFreshHtml = `<label class="sbpx-tool sbpx-force-fresh">
+        <input type="checkbox" class="sbpx-force-fresh-cb" data-role="force-fresh" />
+        <span>${escapeHtml(t('forceFresh'))}</span>
+      </label>`;
 	const bulkBtnHtml = `<button class="sbpx-btn sbpx-btn-primary" data-role="bulk" ${
 		mode === 'list' ? 'disabled' : ''
 	}>${escapeHtml(t('downloadSelected'))}</button>`;
@@ -374,8 +390,8 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
       </a>`;
 	toolbar.innerHTML =
 		mode === 'list'
-			? `${selectAllHtml}${includeVideosHtml}${bulkBtnHtml}${cancelBtnHtml}${countHtml}${statusHtml}${spacerHtml}${kofiHtml}`
-			: `${bulkBtnHtml}${cancelBtnHtml}${includeVideosHtml}${spacerHtml}${statusHtml}`;
+			? `${selectAllHtml}${includeVideosHtml}${forceFreshHtml}${bulkBtnHtml}${cancelBtnHtml}${countHtml}${statusHtml}${spacerHtml}${kofiHtml}`
+			: `${bulkBtnHtml}${cancelBtnHtml}${includeVideosHtml}${forceFreshHtml}${spacerHtml}${statusHtml}`;
 
 	const selectAll = toolbar.querySelector<HTMLInputElement>('.sbpx-select-all-cb');
 	if (selectAll) {
@@ -399,6 +415,13 @@ function buildToolbar(mode: ToolbarMode): HTMLDivElement {
 		// Clear any leftover terminal status so it doesn't read wrong for
 		// the new mode (e.g. "Saved N photos" lingering after the user
 		// just ticked "Include videos").
+		if (!STATE.busy) setStatus('');
+	});
+
+	const forceFreshCb = toolbar.querySelector<HTMLInputElement>('[data-role="force-fresh"]')!;
+	forceFreshCb.checked = STATE.forceFresh;
+	forceFreshCb.addEventListener('change', () => {
+		STATE.forceFresh = forceFreshCb.checked;
 		if (!STATE.busy) setStatus('');
 	});
 
@@ -612,6 +635,7 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 		const result = await downloadBulkPhotos(activities, {
 			includeVideos,
 			signal: controller.signal,
+			forceFresh: STATE.forceFresh,
 			onProgress: (ev) => {
 				if (ev.stage === 'discovering') {
 					setStatus(t('preparingDownloads', String(ev.total)), 'info', { spinner: true });
@@ -629,11 +653,31 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 			},
 		});
 		if (result.ok === 0 && result.failed.length === 0) {
-			setStatus(t(includeVideos ? 'noMediaFound' : 'noPhotosFound'), 'warn');
+			// Disambiguate "we found nothing" from "we found things but
+			// they were all in the saved-history". The latter reads as a
+			// success ("you already have everything"); the former as a
+			// search-result miss.
+			if (result.skippedHistory > 0) {
+				setStatus(t('allAlreadySaved'), 'ok');
+			} else {
+				setStatus(t(includeVideos ? 'noMediaFound' : 'noPhotosFound'), 'warn');
+			}
 		} else {
 			const firstFailed = result.failed[0];
 			if (firstFailed) {
 				setStatus(t('savedWithSkips', [String(result.ok), String(result.failed.length), firstFailed.reason]), 'warn');
+			} else if (result.skippedHistory > 0) {
+				// At least one item was filtered out by the saved-history;
+				// surface that so the user can tell partial save from a
+				// fresh full save. We use the photos-only template
+				// regardless of includeVideos here - "photos" reads more
+				// naturally than "items" and the number is accurate (the
+				// videos-only case adds a few items, doesn't change the
+				// shape of the message).
+				setStatus(
+					t('savedWithSkippedHistory', [String(result.ok), String(result.activities), String(result.skippedHistory)]),
+					'ok',
+				);
 			} else if (includeVideos && result.videos > 0) {
 				setStatus(t('savedMedia', [String(result.photos), String(result.videos), String(result.activities)]), 'ok');
 			} else {

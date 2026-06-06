@@ -15,6 +15,7 @@
 // into a single video file before sending bytes back.
 
 import JSZip from 'jszip';
+import { loadSavedMediaIds, markMediaIdsSaved } from './storage.ts';
 import type { ActivityRow, BulkResult, DownloadOptions, MediaRef } from './types.ts';
 
 // ---------- Debug logging seam ----------
@@ -620,9 +621,16 @@ export interface BulkResultDetailed extends BulkResult {
  */
 export async function downloadBulkPhotos(
 	activities: ActivityRow[],
-	{ includeVideos = false, onProgress, signal }: DownloadOptions = {},
+	{ includeVideos = false, onProgress, signal, forceFresh = false }: DownloadOptions = {},
 ): Promise<BulkResultDetailed> {
-	if (activities.length === 0) return { ok: 0, photos: 0, videos: 0, activities: 0, failed: [] };
+	if (activities.length === 0) return { ok: 0, photos: 0, videos: 0, activities: 0, failed: [], skippedHistory: 0 };
+
+	// Load the saved-history set in parallel with discovery - it's a
+	// single round-trip to chrome.storage.local that almost always
+	// finishes before discovery's first /activities/<id> fetch. When
+	// forceFresh is true we skip the storage read entirely so the bulk
+	// run touches no metadata at all.
+	const savedHistoryPromise: Promise<Set<string>> = forceFresh ? Promise.resolve(new Set()) : loadSavedMediaIds();
 
 	// Phase 1: discover. Parallel with a small concurrency cap and a
 	// pre-sized result array so the final order matches the user's row
@@ -656,24 +664,46 @@ export async function downloadBulkPhotos(
 		}),
 	);
 
+	// Wait for the saved-history read to land before filtering. This
+	// almost always resolved during discovery's first network round-trip
+	// but the await keeps the contract obvious - we never start
+	// downloading until we know what to skip.
+	const savedHistory = await savedHistoryPromise;
+
 	const allMedia: MediaRef[] = [];
 	const contributingActivities = new Set<string>();
+	let skippedHistory = 0;
 	for (let i = 0; i < perActivityItems.length; i++) {
 		const items = perActivityItems[i] ?? [];
-		if (items.length > 0) {
+		if (items.length === 0) continue;
+		const fresh: MediaRef[] = [];
+		for (const item of items) {
+			if (savedHistory.has(item.mediaId)) {
+				skippedHistory++;
+			} else {
+				fresh.push(item);
+			}
+		}
+		if (fresh.length > 0) {
 			contributingActivities.add(activities[i]!.id);
-			allMedia.push(...items);
+			allMedia.push(...fresh);
 		}
 	}
 
 	if (allMedia.length === 0) {
-		return { ok: 0, photos: 0, videos: 0, activities: 0, failed: [] };
+		return { ok: 0, photos: 0, videos: 0, activities: 0, failed: [], skippedHistory };
 	}
 
 	// Phase 2: download.
 	const total = allMedia.length;
 	const zip = new JSZip();
 	const failed: BulkResultDetailed['failed'] = [];
+	// Track which items actually landed in the zip so we can persist them
+	// to chrome.storage.local after the run finishes. We mark items as
+	// saved only AFTER the zip emits successfully, not per-item, so a
+	// run that throws on zip generation doesn't leave history entries
+	// claiming success.
+	const succeededItems: { mediaId: string; activityId: string }[] = [];
 	let completed = 0;
 	let photoCount = 0;
 	let videoCount = 0;
@@ -703,6 +733,7 @@ export async function downloadBulkPhotos(
 									dateTimeOriginal: item.dateTimeOriginal,
 								});
 					zip.file(sanitizeFilename(item.suggestedFilename), blob);
+					succeededItems.push({ mediaId: item.mediaId, activityId: item.activityId });
 					if (item.mediaType === 'video') videoCount++;
 					else photoCount++;
 				} catch (e) {
@@ -743,5 +774,15 @@ export async function downloadBulkPhotos(
 		filename = videoCount > 0 ? `strava_media_${date}.zip` : `strava_photos_${date}.zip`;
 	}
 	downloadBlob(filename, blob);
-	return { ok: successCount, photos: photoCount, videos: videoCount, activities: contributingActivities.size, failed };
+	// If chrome.storage is unavailable we silently lose history for these
+	// items, which is no worse than the pre-history behaviour.
+	void markMediaIdsSaved(succeededItems);
+	return {
+		ok: successCount,
+		photos: photoCount,
+		videos: videoCount,
+		activities: contributingActivities.size,
+		failed,
+		skippedHistory,
+	};
 }

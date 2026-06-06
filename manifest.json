@@ -6,6 +6,7 @@
 	"default_locale": "en",
 	"homepage_url": "https://github.com/mladimatija/strava-bulk-photo-export",
 	"host_permissions": ["https://dgtzuqphqg23d.cloudfront.net/*", "https://d35tn3x5zm6xrc.cloudfront.net/*"],
+	"permissions": ["storage"],
 	"background": {
 		"service_worker": "src/background.ts",
 		"type": "module"

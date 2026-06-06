@@ -129,6 +129,35 @@
 			}
 		}
 	},
+	"cancel": {
+		"message": "Annuler"
+	},
+	"cancelled": {
+		"message": "Annulé."
+	},
+	"forceFresh": {
+		"message": "Tout télécharger à nouveau"
+	},
+	"savedWithSkippedHistory": {
+		"message": "$COUNT$ photos enregistrées depuis $ACTIVITIES$ activités ($SKIPPED$ déjà enregistrées).",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			},
+			"skipped": {
+				"content": "$3",
+				"example": "47"
+			}
+		}
+	},
+	"allAlreadySaved": {
+		"message": "Rien de nouveau à enregistrer - chaque élément sélectionné est déjà dans vos téléchargements."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

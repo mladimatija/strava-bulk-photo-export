@@ -919,7 +919,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		expect(zipClick).toBeDefined();
 	});
 
-	// ---------- Coverage gap: mixed-success failures ----------
+	// ----------  mixed-success failures ----------
 	//
 	// When some photos in a bulk run land and others fail (typically because
 	// the CDN returns 404 for an expired URL), the downloader collects the
@@ -975,7 +975,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		expect(clicks.find((c) => (c.download ?? '').endsWith('.zip'))).toBeDefined();
 	});
 
-	// ---------- Coverage gap: HLS error path ----------
+	// ----------  HLS error path ----------
 	//
 	// When Include videos is on but the master m3u8 fails to load (CDN 404,
 	// network drop, etc.), the video item should be skipped while the
@@ -1032,7 +1032,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		expect(clicks.find((c) => (c.download ?? '').endsWith('.zip'))).toBeDefined();
 	});
 
-	// ---------- Coverage gap: EXIF metadata injection sanity ----------
+	// ----------  EXIF metadata injection sanity ----------
 	//
 	// The background SW round-trips each JPEG through piexifjs to embed the
 	// activity name (ImageDescription) and, when available, GPS coordinates
@@ -1105,7 +1105,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		await expect(status).toContainText('Saved 1 photos');
 	});
 
-	// ---------- Coverage gap: byte-content round-trip ----------
+	// ----------  byte-content round-trip ----------
 	//
 	// The discovery + click assertions used to be the entire coverage; the
 	// e2e suite never actually decoded the saved bytes. That gap let a
@@ -1190,7 +1190,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		);
 	});
 
-	// ---------- Coverage gap: chunked transfer path ----------
+	// ----------  chunked transfer path ----------
 	//
 	// Large videos historically failed with "Message exceeded maximum
 	// allowed size of 64MiB" because the SW returned the entire base64
@@ -1271,7 +1271,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		});
 	});
 
-	// ---------- Coverage gap: Cancel button ----------
+	// ----------  Cancel button ----------
 	//
 	// The Cancel button is hidden when idle, shown while a bulk run is in
 	// flight, and aborts the run on click. The downloader checks the abort
@@ -1328,7 +1328,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		release();
 	});
 
-	// ---------- Coverage gap: DateTimeOriginal EXIF ----------
+	// ----------  DateTimeOriginal EXIF ----------
 	//
 	// Apple Photos / Lightroom rely on EXIF DateTimeOriginal to sort the
 	// photo timeline. The downloader now reads `start_date_local` out of
@@ -1387,6 +1387,151 @@ test.describe('Strava Bulk Photo Export extension', () => {
 			haystack.includes(Buffer.from('2024:05:14 10:30:00', 'ascii')),
 			'EXIF DateTimeOriginal present in saved JPEG',
 		).toBe(true);
+	});
+
+	// ----------  resume after failure ----------
+	//
+	// Saved-history skip flow: a previous run's mediaIds live in
+	// chrome.storage.local, and the next run's discovery phase filters
+	// them out. We seed the storage via the SW (which is where the
+	// extension's chrome.storage permissions actually take effect),
+	// then verify the status line distinguishes "saved with some
+	// already saved" from a plain success. A second case proves the
+	// "everything already saved" terminal state.
+	test('saved-history skips previously downloaded items and reports the count', async ({ extensionPage, context }) => {
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		// Seed the saved set with one of the two mediaIds we're about to
+		// expose via the fixture, then re-load to take effect.
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.set({
+				sbpx_saved_v1: {
+					'old-photo': { savedAt: Date.now(), activityId: '9000000001' },
+				},
+			});
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [
+						{ id: 'old-photo', largeUrl: `${cdn}/old-photo-2048x2048.jpg` },
+						{ id: 'new-photo', largeUrl: `${cdn}/new-photo-2048x2048.jpg` },
+					],
+				}),
+			});
+		});
+		const fetched: string[] = [];
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			fetched.push(route.request().url());
+			await route.fulfill({
+				status: 200,
+				contentType: 'image/jpeg',
+				body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+			});
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Skipped-history success message: 1 saved, 1 skipped, 1 activity.
+		const status = extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]');
+		await expect(status).toContainText('Saved 1 photos from 1 activities (1 already saved)');
+
+		// Only the new photo was fetched - the old one never hit the CDN.
+		expect(fetched.filter((u) => u.includes('new-photo')).length).toBeGreaterThan(0);
+		expect(fetched.filter((u) => u.includes('old-photo')).length).toBe(0);
+
+		// Reset the saved set so subsequent tests aren't affected.
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.remove('sbpx_saved_v1');
+		});
+	});
+
+	test('"Re-download everything" toggle bypasses the saved-history filter', async ({ extensionPage, context }) => {
+		const [sw] = context.serviceWorkers();
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.set({
+				sbpx_saved_v1: {
+					'previously-saved': { savedAt: Date.now(), activityId: '9000000001' },
+				},
+			});
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'previously-saved', largeUrl: `${cdn}/previously-saved-2048x2048.jpg` }],
+				}),
+			});
+		});
+		const fetched: string[] = [];
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			fetched.push(route.request().url());
+			await route.fulfill({
+				status: 200,
+				contentType: 'image/jpeg',
+				body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+			});
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		// Tick "Re-download everything" so the saved-history filter is bypassed.
+		await extensionPage.locator('[data-role="force-fresh"]').check();
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Plain success status - no "already saved" qualifier.
+		const status = extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]');
+		await expect(status).toContainText('Saved 1 photos from 1 activities.');
+
+		// Photo was fetched despite being in the saved set.
+		expect(fetched.filter((u) => u.includes('previously-saved')).length).toBeGreaterThan(0);
+
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.remove('sbpx_saved_v1');
+		});
+	});
+
+	test('when every item is already saved, status reads "Nothing new to save"', async ({ extensionPage, context }) => {
+		const [sw] = context.serviceWorkers();
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.set({
+				sbpx_saved_v1: {
+					'fully-saved': { savedAt: Date.now(), activityId: '9000000001' },
+				},
+			});
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'fully-saved', largeUrl: `${cdn}/fully-saved-2048x2048.jpg` }],
+				}),
+			});
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Distinct success-kind message - not the "no photos found" warn.
+		const status = extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]');
+		await expect(status).toContainText('Nothing new to save');
+
+		await sw!.evaluate(async () => {
+			await chrome.storage.local.remove('sbpx_saved_v1');
+		});
 	});
 });
 

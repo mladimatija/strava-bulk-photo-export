@@ -59,9 +59,9 @@ The extension augments three groups of Strava pages: the activities list (`/athl
 
 **On the activities list page**, it inserts a toolbar above the table with a Select-all-visible checkbox, an Include-videos toggle, and a primary Download photos button. Each row in the table gets a checkbox at the front and a Photos button at the end. Clicking the row button downloads photos for that single activity. Multi-row selection plus the toolbar button produces a single zip named `strava_photos_<date>.zip` (or `strava_media_<date>.zip` when Include videos is on), one folder per activity, original-resolution photos where Strava exposes them.
 
-**On a single-activity page**, the same toolbar mounts beneath the photo thumbnails inside `#activity-photos-container`, with Select-all and the count widget omitted because the activity is implicit from the URL. The bulk button starts enabled and is labelled Download photos. One click downloads every photo from the current activity as `strava_media_<activity-id>.zip`, with the status message dropping onto its own row beneath the controls so a long "Saved 12 photos…" never gets clipped.
+**On a single-activity page**, the same toolbar mounts beneath the photo thumbnails inside `#activity-photos-container`, with Select-all and the count widget omitted because the activity is implicit from the URL. The bulk button starts enabled and is labeled Download photos. One click downloads every photo from the current activity as `strava_media_<activity-id>.zip`, with the status message dropping onto its own row beneath the controls so a long "Saved 12 photos…" never gets clipped.
 
-**On every page**, activities with no photos are skipped silently - no empty folders. The toolbar surfaces a `No photos found` warning when none of the selected activities have any media, and a partial-success `Saved N items, skipped M (reason)` warning when some photo fetches fail while others succeed.
+**On every page**, activities with no photos are skipped silently – no empty folders. The toolbar surfaces a `No photos found` warning when none of the selected activities have any media, and a partial-success `Saved N items, skipped M (reason)` warning when some photo fetches fail while others succeed.
 
 Everything else - search, sport filter, date filter, sort, pagination - is Strava's own UI. The extension just hooks into whatever's currently on screen.
 
@@ -85,8 +85,8 @@ If you've been on Strava for years and have a few thousand photos in there, that
 
 Two answers, the rest is in [PRIVACY.md](PRIVACY.md):
 
-1. **Trust model.** A hosted service that touched your Strava data would need either your OAuth tokens (the official API has limited photo coverage) or your session cookie (a privacy issue - the cookie grants full account access). A local extension sidesteps both: nothing leaves your browser.
-2. **Rate limits.** Strava's per-app rate limits are shared across every user of an app. A hosted service for thousands of people would hit them in minutes. An extension makes requests from each user's own browser session - there is no shared bucket.
+1. **Trust model.** A hosted service that touched your Strava data would need either your OAuth tokens (the official API has limited photo coverage) or your session cookie (a privacy issue – the cookie grants full account access). A local extension sidesteps both: nothing leaves your browser.
+2. **Rate limits.** Strava's per-app rate limits are shared across every user of an app. A hosted service for thousands of people would hit them in minutes. An extension makes requests from each user's own browser session – there is no shared bucket.
 
 The extension fetches photos directly from the same Strava CDN URLs the page itself already exposes. The downloaded files are byte-for-byte identical to what you'd get by right-click → Save image on each one. Bulk mode is just N concurrent same-origin requests, with the responses streamed into a zip in your browser.
 
@@ -117,11 +117,11 @@ After a `git pull`, run `npm run build` again and click the reload icon next to 
 ## Use
 
 1. Log in to <https://www.strava.com> if you aren't already.
-2. Either visit <https://www.strava.com/athlete/training> for the activities list, or open any single activity at <https://www.strava.com/activities/<id>>.
-3. On the list page, use Strava's own search and filters to scope the list. On a single activity, just look at the toolbar beneath the photo strip.
+2. Either visit <https://www.strava.com/athlete/training> for the activities list or open any single activity at <https://www.strava.com/activities/<id>>.
+3. On the list page, use Strava's own search and filters to scope the list. On a single activity, look at the toolbar beneath the photo strip.
 4. Click the per-row **Photos** button, the toolbar **Download photos** button (after ticking some rows on the list page, or unconditionally on a single activity), and optionally tick **Include videos** first if you want HLS streams downloaded alongside the photos.
 
-The download respects Strava's pagination - only currently visible rows can be checked on the list page. To download more than one page's worth, page through and download each page's batch.
+The download respects Strava's pagination – only currently visible rows can be checked on the list page. To download more than one page's worth, page through and download each page's batch.
 
 ## Development
 
@@ -174,7 +174,7 @@ The repo's version of truth is `package.json.version`. `vite.config.ts` reads it
 
 ### Localization
 
-User-facing strings live in `_locales/<code>/messages.json`. English (`en`) is the source of truth; the manifest's `default_locale` is `en` so any string missing from another locale falls back to it. The Chrome i18n system picks the right locale automatically based on the user's browser language - no flag, no extension setting.
+User-facing strings live in `_locales/<code>/messages.json`. English (`en`) is the source of truth; the manifest's `default_locale` is `en` so any string missing from another locale falls back to it. The Chrome i18n system picks the right locale automatically based on the user's browser language – no flag, no extension setting.
 
 Code calls strings through a typed `t()` helper in `src/i18n.ts`:
 
@@ -199,13 +199,13 @@ npm test                 # Playwright E2E suite (tests/e2e/*.spec.ts)
 npm run test:screenshots # regenerate docs/screenshots/* and docs/store/screenshot-*.png
 ```
 
-The E2E suite is split into two describe blocks: list-page behaviour (toolbar mount, per-row injection, multi-select, route-override sanity, bare-URL probe + fallback, photos-only success, "no photos found", videos-on HLS path, mixed-success failures, HLS master 404, and a piexifjs EXIF-injection canary) and single-activity-page behaviour (toolbar mounts inside `#activity-photos-container`, bulk button starts enabled, status drops to its own row, empty status collapses, one-click download writes `strava_media_<id>.zip`, dark-mode CSS variables flip on `html.dark`). The screenshot suite generates 5 cropped images for the README and 6 full-viewport 1280×800 images for the Chrome Web Store listing.
+The E2E suite is split into two describe blocks: list-page behavior (toolbar mount, per-row injection, multi-select, route-override sanity, bare-URL probe + fallback, photos-only success, "no photos found", videos-on HLS path, mixed-success failures, HLS master 404, and a piexifjs EXIF-injection canary) and single-activity-page behavior (toolbar mounts inside `#activity-photos-container`, bulk button starts enabled, status drops to its own row, empty status collapses, one-click download writes `strava_media_<id>.zip`, dark-mode CSS variables flip on `html.dark`). The screenshot suite generates five cropped images for the README and six full-viewport 1280×800 images for the Chrome Web Store listing.
 
 Both suites load the built extension into a real Chromium instance and intercept the matching `strava.com` URL to serve one of the two fixtures in `tests/fixtures/`. The training fixture is a stripped-down activities table; the activity fixture is a fuller replica of `/activities/<id>` with the sidenav, heading, photo strip, weather block, and stats column so screenshots read authentically.
 
 A note on running the tests: the fixture launches Chromium with `headless: false` (a visible window pops up) because Chrome only loads extensions in headful mode - the old headless mode silently ignores `--load-extension`, and Chrome 137+ additionally requires `--disable-features=DisableLoadExtensionCommandLineSwitch` to permit the flag at all. CI wraps the command in `xvfb-run` so Linux runners have a virtual display. On macOS and Windows the visible browser is fine; if you're on a headless Linux dev machine, prefix `npm test` with `xvfb-run --auto-servernum`.
 
-By default the tests use Playwright's bundled Chromium - pinned to whatever Playwright version is installed, reproducible across machines. To run against your installed Chrome stable instead (closer to what end users have but less reproducible), set `PWTEST_BROWSER=chrome`:
+By default, the tests use Playwright's bundled Chromium – pinned to whatever Playwright version is installed, reproducible across machines. To run against your installed Chrome stable instead (closer to what end users have but less reproducible), set `PWTEST_BROWSER=chrome`:
 
 ```bash
 PWTEST_BROWSER=chrome npm test

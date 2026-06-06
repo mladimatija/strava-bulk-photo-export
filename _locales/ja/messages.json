@@ -129,6 +129,35 @@
 			}
 		}
 	},
+	"cancel": {
+		"message": "キャンセル"
+	},
+	"cancelled": {
+		"message": "キャンセルしました。"
+	},
+	"forceFresh": {
+		"message": "すべて再ダウンロード"
+	},
+	"savedWithSkippedHistory": {
+		"message": "$ACTIVITIES$件のアクティビティから$COUNT$枚の写真を保存しました（$SKIPPED$枚はすでに保存済み）。",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			},
+			"skipped": {
+				"content": "$3",
+				"example": "47"
+			}
+		}
+	},
+	"allAlreadySaved": {
+		"message": "新しく保存するものはありません - 選択したすべての項目はすでにダウンロード済みです。"
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

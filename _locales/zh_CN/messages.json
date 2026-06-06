@@ -129,6 +129,35 @@
 			}
 		}
 	},
+	"cancel": {
+		"message": "取消"
+	},
+	"cancelled": {
+		"message": "已取消。"
+	},
+	"forceFresh": {
+		"message": "全部重新下载"
+	},
+	"savedWithSkippedHistory": {
+		"message": "已保存 $ACTIVITIES$ 个活动中的 $COUNT$ 张照片（已有 $SKIPPED$ 张）。",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			},
+			"skipped": {
+				"content": "$3",
+				"example": "47"
+			}
+		}
+	},
+	"allAlreadySaved": {
+		"message": "没有新内容可保存 - 选中的每一项都已在你的下载中。"
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}

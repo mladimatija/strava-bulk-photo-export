@@ -129,6 +129,35 @@
 			}
 		}
 	},
+	"cancel": {
+		"message": "Отменить"
+	},
+	"cancelled": {
+		"message": "Отменено."
+	},
+	"forceFresh": {
+		"message": "Скачать всё заново"
+	},
+	"savedWithSkippedHistory": {
+		"message": "Сохранено $COUNT$ фото из $ACTIVITIES$ активностей ($SKIPPED$ уже сохранено).",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			},
+			"activities": {
+				"content": "$2",
+				"example": "5"
+			},
+			"skipped": {
+				"content": "$3",
+				"example": "47"
+			}
+		}
+	},
+	"allAlreadySaved": {
+		"message": "Нет нового для сохранения - все выбранные элементы уже скачаны."
+	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
 	}
