@@ -137,18 +137,18 @@ export async function loadFilenameTemplate(): Promise<string> {
  * Persist the user's filename template. Empty / whitespace-only input
  * is treated as "reset to default" - it's the same result the user
  * would get by manually clicking Reset and saves an extra round-trip.
+ *
+ * Throws on storage failure so the options page can show the error
+ * instead of silently confirming a save that never happened. Callers
+ * that want fire-and-forget semantics (e.g. tests, dev contexts where
+ * sync is unavailable) should catch.
  */
 export async function saveFilenameTemplate(template: string): Promise<void> {
 	if (!syncStorageAvailable()) return;
-	try {
-		const trimmed = template.trim();
-		if (trimmed === '' || trimmed === DEFAULT_FILENAME_TEMPLATE) {
-			await chrome.storage.sync.remove(TEMPLATE_KEY);
-			return;
-		}
-		await chrome.storage.sync.set({ [TEMPLATE_KEY]: trimmed });
-	} catch {
-		/* silent - the options-page Save button surfaces this if the
-		   call somehow fails by the absence of a "Saved." confirmation. */
+	const trimmed = template.trim();
+	if (trimmed === '' || trimmed === DEFAULT_FILENAME_TEMPLATE) {
+		await chrome.storage.sync.remove(TEMPLATE_KEY);
+		return;
 	}
+	await chrome.storage.sync.set({ [TEMPLATE_KEY]: trimmed });
 }

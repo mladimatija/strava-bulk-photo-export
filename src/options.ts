@@ -66,19 +66,30 @@ async function init(): Promise<void> {
 		savedConfirmation.hidden = true;
 	});
 
+	const persist = async (value: string): Promise<void> => {
+		try {
+			await saveFilenameTemplate(value);
+			savedConfirmation.textContent = t('optionsSavedConfirmation');
+		} catch (err) {
+			// Show the storage failure inline next to the Save button.
+			// The reason is left raw English because chrome.storage.sync
+			// errors (quota, runtime gone) are not i18n'd; the prefix is
+			// translatable and the rest is diagnostic.
+			const reason = err instanceof Error ? err.message : String(err);
+			savedConfirmation.textContent = t('optionsSaveFailed', reason);
+		}
+		savedConfirmation.hidden = false;
+	};
+
 	form.addEventListener('submit', async (e) => {
 		e.preventDefault();
-		await saveFilenameTemplate(input.value);
-		savedConfirmation.textContent = t('optionsSavedConfirmation');
-		savedConfirmation.hidden = false;
+		await persist(input.value);
 	});
 
 	resetBtn.addEventListener('click', async () => {
 		input.value = DEFAULT_FILENAME_TEMPLATE;
 		renderPreview(input.value, preview);
-		await saveFilenameTemplate(DEFAULT_FILENAME_TEMPLATE);
-		savedConfirmation.textContent = t('optionsSavedConfirmation');
-		savedConfirmation.hidden = false;
+		await persist(DEFAULT_FILENAME_TEMPLATE);
 	});
 }
 

@@ -124,8 +124,11 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "Nothing new to save - every selected item is already in your downloads.",
-		"description": "Terminal status when the user ran a bulk download but every item was already saved in a previous run."
+		"message": "Nothing new to save - all $COUNT$ selected items are already in your downloads.",
+		"description": "Terminal status when the user ran a bulk download but every selected item was already saved in a previous run. COUNT is the number that would have been re-downloaded had they not already been saved.",
+		"placeholders": {
+			"count": { "content": "$1", "example": "12" }
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export",
@@ -154,6 +157,13 @@
 	"optionsSavedConfirmation": {
 		"message": "Saved.",
 		"description": "Brief confirmation shown next to the Save button after a successful save."
+	},
+	"optionsSaveFailed": {
+		"message": "Save failed: $REASON$",
+		"description": "Surfaced next to the Save button when persisting the filename template throws (chrome.storage.sync quota, runtime gone, etc.). REASON stays in English - it's diagnostic.",
+		"placeholders": {
+			"reason": { "content": "$1", "example": "QUOTA_BYTES_PER_ITEM exceeded" }
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com",

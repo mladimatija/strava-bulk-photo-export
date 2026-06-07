@@ -19,7 +19,7 @@
 // Both modes share the same status line, run-photo-download flow, busy
 // interlock, and `STATE.includeVideos` toggle.
 
-import { downloadBulkPhotos } from './photo-downloader.ts';
+import { downloadBulkPhotos, type BulkResultDetailed } from './photo-downloader.ts';
 import { KOFI_IMAGE } from './kofi-asset.ts';
 import { t } from './i18n.ts';
 import type { ActivityRow, StatusKind } from './types.ts';
@@ -62,7 +62,7 @@ interface State {
 	 */
 	singleActivity: ActivityRow | null;
 	/**
-	 * Controller for the in-flight bulk run, or null when idle. Set at the
+	 * Controller for the active bulk run, or null when idle. Set at the
 	 * start of runPhotoDownload, cleared in its finally. The Cancel button
 	 * calls `.abort()` on this; downloadBulkPhotos throws an AbortError at
 	 * the next safe boundary and the catch surfaces "Cancelled." status.
@@ -119,7 +119,7 @@ function parseSingleActivityFromPage(): ActivityRow | null {
 	const nameEl =
 		document.querySelector<HTMLElement>('h1.activity-name') ?? document.querySelector<HTMLElement>('.activity-name');
 	const name = nameEl?.textContent?.trim() ?? `Activity ${id}`;
-	// The title span reads `<a>Athlete Name</a> – Sport`. We want just the
+	// The title span reads `<a>Athlete Name</a> - Sport`. We want just the
 	// trailing sport label, so pull text-only child nodes and strip leading
 	// dashes / bullets / whitespace.
 	let sport_type = '';
@@ -652,39 +652,8 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 				}
 			},
 		});
-		if (result.ok === 0 && result.failed.length === 0) {
-			// Disambiguate "we found nothing" from "we found things but
-			// they were all in the saved-history". The latter reads as a
-			// success ("you already have everything"); the former as a
-			// search-result miss.
-			if (result.skippedHistory > 0) {
-				setStatus(t('allAlreadySaved'), 'ok');
-			} else {
-				setStatus(t(includeVideos ? 'noMediaFound' : 'noPhotosFound'), 'warn');
-			}
-		} else {
-			const firstFailed = result.failed[0];
-			if (firstFailed) {
-				setStatus(t('savedWithSkips', [String(result.ok), String(result.failed.length), firstFailed.reason]), 'warn');
-			} else if (result.skippedHistory > 0) {
-				// At least one item was filtered out by the saved-history;
-				// surface that so the user can tell partial save from a
-				// fresh full save. We use the photos-only template
-				// regardless of includeVideos here - "photos" reads more
-				// naturally than "items" and the number is accurate (the
-				// videos-only case adds a few items, doesn't change the
-				// shape of the message).
-				setStatus(
-					t('savedWithSkippedHistory', [String(result.ok), String(result.activities), String(result.skippedHistory)]),
-					'ok',
-				);
-			} else if (includeVideos && result.videos > 0) {
-				setStatus(t('savedMedia', [String(result.photos), String(result.videos), String(result.activities)]), 'ok');
-			} else {
-				// Either includeVideos was off OR no videos turned up - use the photos-only copy.
-				setStatus(t('savedPhotos', [String(result.photos), String(result.activities)]), 'ok');
-			}
-		}
+		const { text, kind } = statusForResult(result, includeVideos);
+		setStatus(text, kind);
 	} catch (err) {
 		// AbortError is the user's own Cancel click - showing message with text "Cancelled."
 		if ((err as Error)?.name === 'AbortError') {
@@ -699,6 +668,51 @@ async function runPhotoDownload(activities: ActivityRow[]): Promise<void> {
 		setProgress(null);
 		renderToolbarCounts();
 	}
+}
+
+/**
+ * Pick the terminal status copy for a finished bulk run.
+ *
+ * Priority order (highest first):
+ *   1. Some failed   → "Saved N items, skipped M (reason)" (warn)
+ *   2. Nothing found AND nothing in history → "No photos/items found" (warn)
+ *   3. Nothing found BUT skipped from history → "Nothing new to save" (ok)
+ *   4. Videos in the mix → "Saved P photos and V videos…" (ok)
+ *   5. Skipped from history, no videos → "Saved N photos … (M already saved)" (ok)
+ *   6. Default → "Saved N photos from M activities." (ok)
+ *
+ * The videos branch wins over the skipped-from-history branch on purpose - a
+ * run that pulled both videos and skipped items needs the kind-accurate
+ * "P photos and V videos" message; reversing the priority would silently
+ * mis-label such a run as photos-only (the previous bug).
+ */
+function statusForResult(result: BulkResultDetailed, includeVideos: boolean): { text: string; kind: StatusKind } {
+	const firstFailed = result.failed[0];
+	if (firstFailed) {
+		return {
+			text: t('savedWithSkips', [String(result.ok), String(result.failed.length), firstFailed.reason]),
+			kind: 'warn',
+		};
+	}
+	if (result.ok === 0) {
+		if (result.skippedHistory > 0) {
+			return { text: t('allAlreadySaved', String(result.skippedHistory)), kind: 'ok' };
+		}
+		return { text: t(includeVideos ? 'noMediaFound' : 'noPhotosFound'), kind: 'warn' };
+	}
+	if (includeVideos && result.videos > 0) {
+		return {
+			text: t('savedMedia', [String(result.photos), String(result.videos), String(result.activities)]),
+			kind: 'ok',
+		};
+	}
+	if (result.skippedHistory > 0) {
+		return {
+			text: t('savedWithSkippedHistory', [String(result.ok), String(result.activities), String(result.skippedHistory)]),
+			kind: 'ok',
+		};
+	}
+	return { text: t('savedPhotos', [String(result.photos), String(result.activities)]), kind: 'ok' };
 }
 
 async function handleBulkClick(): Promise<void> {
