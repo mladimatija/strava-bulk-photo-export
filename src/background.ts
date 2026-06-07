@@ -115,6 +115,13 @@ interface ReadChunkSuccess {
 	ok: true;
 	base64: string;
 	done: boolean;
+	/**
+	 * Absolute byte offset the next `sbpx-read-chunk` should ask for. Always
+	 * `start + chunkSize` capped at `totalBytes`. Lets the content script
+	 * pipeline the next request without knowing the SW-internal chunk size
+	 * (which can be flipped at runtime via the test override).
+	 */
+	nextOffset: number;
 }
 interface ReleaseSuccess {
 	ok: true;
@@ -192,6 +199,21 @@ interface HeldTransfer {
 const TRANSFERS = new Map<string, HeldTransfer>();
 
 /**
+ * Total bytes currently held across all chunked transfers. Capped so that a
+ * user with five tabs each downloading a 100 MiB video can't make the SW
+ * working set blow past Chrome's MV3 termination threshold (~30-50 MiB on
+ * lower-end devices). When the cap is hit, we refuse to stash a new transfer
+ * and surface a clear, actionable error to the user.
+ */
+const MAX_TRANSFER_BYTES = 64 * 1024 * 1024;
+
+function totalHeldBytes(): number {
+	let total = 0;
+	for (const t of TRANSFERS.values()) total += t.bytes.length;
+	return total;
+}
+
+/**
  * Allow tests to lower the chunk threshold so the chunked path can be
  * exercised with a small fixture instead of a 24 MiB payload.
  *
@@ -205,7 +227,11 @@ function getChunkSize(): number {
 }
 
 function makeTransferId(): string {
-	return `sbpx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+	// `crypto.randomUUID()` is available in the MV3 service-worker context
+	// (secure-origin extension page). 122 bits of entropy makes the id
+	// effectively unguessable, which matters: any tab on strava.com can call
+	// `sbpx-read-chunk` against any transferId.
+	return `sbpx_${crypto.randomUUID()}`;
 }
 
 /**
@@ -217,10 +243,16 @@ function buildPhotoResponse(
 	bytes: Uint8Array,
 	mimeType: string,
 	fetchedUrl: string,
-): FetchPhotoInlineSuccess | FetchPhotoChunkedSuccess {
+): FetchPhotoInlineSuccess | FetchPhotoChunkedSuccess | FetchFailure {
 	const chunkSize = getChunkSize();
 	if (bytes.length <= chunkSize) {
 		return { ok: true, kind: 'photo', inline: true, base64: bytesToBase64(bytes), mimeType, fetchedUrl };
+	}
+	if (totalHeldBytes() + bytes.length > MAX_TRANSFER_BYTES) {
+		return {
+			ok: false,
+			error: 'Too many concurrent large downloads. Wait for active downloads to finish, then try again.',
+		};
 	}
 	const transferId = makeTransferId();
 	TRANSFERS.set(transferId, { bytes, mimeType, expiresAt: Date.now() + TRANSFER_TTL_MS });
@@ -232,10 +264,16 @@ function buildVideoResponse(
 	bytes: Uint8Array,
 	mimeType: string,
 	segmentCount: number,
-): FetchVideoInlineSuccess | FetchVideoChunkedSuccess {
+): FetchVideoInlineSuccess | FetchVideoChunkedSuccess | FetchFailure {
 	const chunkSize = getChunkSize();
 	if (bytes.length <= chunkSize) {
 		return { ok: true, kind: 'video', inline: true, base64: bytesToBase64(bytes), mimeType, segmentCount };
+	}
+	if (totalHeldBytes() + bytes.length > MAX_TRANSFER_BYTES) {
+		return {
+			ok: false,
+			error: 'Too many concurrent large downloads. Wait for active downloads to finish, then try again.',
+		};
 	}
 	const transferId = makeTransferId();
 	TRANSFERS.set(transferId, { bytes, mimeType, expiresAt: Date.now() + TRANSFER_TTL_MS });
@@ -263,7 +301,15 @@ function scheduleTransferGc(): void {
 
 function handleReadChunk(req: ReadChunkRequest): ReadChunkSuccess | FetchFailure {
 	const transfer = TRANSFERS.get(req.transferId);
-	if (!transfer) return { ok: false, error: 'transfer expired or unknown' };
+	// MV3 service workers can be evicted between messages; when that happens
+	// mid-drain the held bytes are gone and the content script's only safe
+	// recovery is a full reload (the inline-or-stash decision was made by a
+	// now-dead SW instance, so re-asking for the same transferId can't work).
+	if (!transfer)
+		return {
+			ok: false,
+			error: 'Download transfer lost (extension service worker was restarted). Reload the page and try again.',
+		};
 	const chunkSize = getChunkSize();
 	const start = Math.max(0, req.offset);
 	const end = Math.min(start + chunkSize, transfer.bytes.length);
@@ -272,7 +318,7 @@ function handleReadChunk(req: ReadChunkRequest): ReadChunkSuccess | FetchFailure
 	// Refresh TTL while the content script is actively draining.
 	transfer.expiresAt = Date.now() + TRANSFER_TTL_MS;
 	if (done) TRANSFERS.delete(req.transferId);
-	return { ok: true, base64: bytesToBase64(slice), done };
+	return { ok: true, base64: bytesToBase64(slice), done, nextOffset: end };
 }
 
 function handleReleaseTransfer(req: ReleaseTransferRequest): ReleaseSuccess {
@@ -373,6 +419,12 @@ function guessMimeFromBytes(firstBytes: Uint8Array): string | null {
  * char in 0x00-0xff. piexifjs operates on this representation internally.
  * Chunked so `String.fromCharCode(...big)` doesn't blow Chrome's argument-
  * count limit on multi-megabyte payloads.
+ *
+ * Memory note: this allocates a parts array of ~N/32k strings + the joined
+ * full-length string + piexifjs's own copy, peaking at roughly 3x the input
+ * size in transient memory. Acceptable for 4-8 MiB Strava JPEGs (24 MiB
+ * peak); don't naively raise the inline chunk threshold without measuring
+ * SW memory under load.
  */
 function bytesToBinaryString(bytes: Uint8Array): string {
 	const chunkSize = 0x8000;
@@ -438,7 +490,13 @@ function injectExif(jpegBytes: Uint8Array<ArrayBuffer>, m: PhotoMetadata): Uint8
 		const activityNameTrimmed = m.activityName?.trim() ?? '';
 		const description = captionTrimmed !== '' ? captionTrimmed : activityNameTrimmed;
 		if (description !== '') {
-			zeroth[piexif.ImageIFD.ImageDescription] = description;
+			// Cap to ~1 KB so an unusually long Strava caption (the field
+			// allows up to 2000 chars) can't produce an oversized
+			// ImageDescription EXIF tag that some downstream parsers handle
+			// poorly. ASCII captions truncate cleanly at the char boundary;
+			// the value isn't load-bearing for any downstream consumer.
+			zeroth[piexif.ImageIFD.ImageDescription] =
+				description.length > 1024 ? `${description.slice(0, 1021)}...` : description;
 		}
 
 		const exifObj: ExifObject = { '0th': zeroth };

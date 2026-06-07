@@ -501,6 +501,8 @@ interface ReadChunkSuccess {
 	ok: true;
 	base64: string;
 	done: boolean;
+	/** Absolute byte offset the NEXT `sbpx-read-chunk` request should ask for. */
+	nextOffset: number;
 }
 type FetchSuccess = FetchInlineSuccess | FetchChunkedSuccess;
 type FetchResponse = FetchSuccess | { ok: false; error: string };
@@ -522,30 +524,46 @@ function base64ToBytes(base64: string): Uint8Array<ArrayBuffer> {
 /**
  * Materialize a SW response into a Blob.
  *
- * Inline path: a single base64 decode → Blob. Chunked path: poll the SW
- * for successive base64 chunks until `done`, then send a best-effort
- * release message so the SW can free the bytes immediately rather than
- * waiting for the TTL sweep.
+ * Inline path: a single base64 decode → Blob. Chunked path: drain the SW
+ * in slices, pipelining the next chunk's request before decoding the
+ * current one so we never block the SW round-trip on the CPU work of a
+ * base64 decode. For a 100 MiB video (~4 chunks at 24 MiB each) that
+ * roughly halves the effective transport overhead.
+ *
+ * On completion (or on a mid-drain throw), the explicit
+ * `sbpx-release-transfer` lets the SW reclaim its held bytes immediately
+ * instead of waiting out the 5-minute TTL.
  */
 async function materializeBlob(res: FetchSuccess): Promise<Blob> {
 	if (res.inline) {
 		return new Blob([base64ToBytes(res.base64)], { type: res.mimeType });
 	}
 	const parts: Uint8Array<ArrayBuffer>[] = [];
-	let offset = 0;
-	let done = false;
-	while (!done) {
-		const chunk: ReadChunkResponse | undefined = await chrome.runtime.sendMessage({
-			type: 'sbpx-read-chunk',
-			transferId: res.transferId,
-			offset,
-		});
+	// Prime the pipeline with the first request, then on each iteration
+	// dispatch the next request BEFORE decoding the current chunk's bytes.
+	let pending: Promise<ReadChunkResponse | undefined> = chrome.runtime.sendMessage({
+		type: 'sbpx-read-chunk',
+		transferId: res.transferId,
+		offset: 0,
+	});
+	while (true) {
+		const chunk = await pending;
 		if (!chunk) throw new Error('Extension service worker unavailable - try reloading the page.');
 		if (!chunk.ok) throw new Error(chunk.error);
-		const bytes = base64ToBytes(chunk.base64);
-		parts.push(bytes);
-		offset += bytes.length;
-		done = chunk.done;
+		// Schedule the next request before paying for the base64 decode. The
+		// SW already knows whether `done` is true (it'll respond with an
+		// error if we ask past the end), and the unused promise is released
+		// silently if `done` lands first; the SW also self-releases on the
+		// final `done: true` so the speculative read isn't a memory issue.
+		if (!chunk.done) {
+			pending = chrome.runtime.sendMessage({
+				type: 'sbpx-read-chunk',
+				transferId: res.transferId,
+				offset: chunk.nextOffset,
+			});
+		}
+		parts.push(base64ToBytes(chunk.base64));
+		if (chunk.done) break;
 	}
 	// The SW also self-releases when `done: true`, but on any abnormal
 	// path (caller threw mid-loop, etc.) the explicit release keeps SW
