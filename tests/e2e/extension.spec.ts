@@ -57,7 +57,7 @@ async function installAnchorClickCapture(page: Page): Promise<void> {
 								window.__sbpxClicks![idx]!.bytes = Array.from(new Uint8Array(buf));
 							})
 							.catch(() => {
-								/* blob already revoked, etc - test will time out and surface that */
+								/* blob already revoked, etc - test will time out and show that */
 							});
 					}
 					e.preventDefault();
@@ -79,15 +79,23 @@ async function readCapturedAnchorClicks(page: Page): Promise<CapturedClick[]> {
  * then return them as a Uint8Array. The downloader produces ZIPs with
  * STORE compression, so the input bytes survive verbatim and the test
  * can grep for fixture markers directly inside the zip payload.
+ *
+ * Backed by `expect.poll` so the retry loop handles its own backoff and
+ * deadline race - no `waitForTimeout`-versus-`Date.now` boundary hazards.
  */
 async function waitForZipBytes(page: Page, downloadName: string, timeoutMs = 5000): Promise<Uint8Array> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		const click = (await readCapturedAnchorClicks(page)).find((c) => c.download === downloadName);
-		if (click?.bytes && click.bytes.length > 0) return new Uint8Array(click.bytes);
-		await page.waitForTimeout(50);
-	}
-	throw new Error(`Timed out waiting for bytes of download "${downloadName}"`);
+	let bytes: number[] | undefined;
+	await expect
+		.poll(
+			async () => {
+				const click = (await readCapturedAnchorClicks(page)).find((c) => c.download === downloadName);
+				bytes = click?.bytes;
+				return bytes && bytes.length > 0 ? bytes.length : 0;
+			},
+			{ timeout: timeoutMs, intervals: [50, 100, 200] },
+		)
+		.toBeGreaterThan(0);
+	return new Uint8Array(bytes!);
 }
 
 /**
@@ -103,6 +111,13 @@ interface FixturePhoto {
 	lat?: number;
 	lng?: number;
 	caption?: string;
+	/**
+	 * Per-photo `created_at_local` field on the React-props blob. When set,
+	 * production code prefers it over the activity-level `start_date_local`
+	 * when writing EXIF DateTimeOriginal - see `toMediaRef` in
+	 * `src/photo-downloader.ts`.
+	 */
+	createdAtLocal?: string;
 }
 interface FixtureVideo {
 	id: string | number;
@@ -127,6 +142,7 @@ function activityPageHtml(
 		lat: p.lat ?? null,
 		lng: p.lng ?? null,
 		caption_escaped: p.caption ?? '',
+		...(p.createdAtLocal !== undefined ? { created_at_local: p.createdAtLocal } : {}),
 		dimensions: { large: { width: 2048, height: 1536 }, thumbnail: { width: 2048, height: 1536 } },
 	}));
 	const videoObjs = (items.videos ?? []).map((v) => ({
@@ -923,7 +939,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 	//
 	// When some photos in a bulk run land and others fail (typically because
 	// the CDN returns 404 for an expired URL), the downloader collects the
-	// failures into `result.failed[]` and the toolbar surfaces a warn-kind
+	// failures into `result.failed[]` and the toolbar shows a warn-kind
 	// status reading "Saved N items, skipped M (reason)". This test pins
 	// that path so future changes to the failure-reporting flow don't
 	// regress it silently.
@@ -1100,7 +1116,7 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		await extensionPage.locator('[data-role="bulk"]').click();
 
 		// `ok`-kind status means piexifjs accepted the input. If it had
-		// crashed, the downloader would have surfaced a warn or err status.
+		// crashed, the downloader would have showed a warning or err status.
 		const status = extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]');
 		await expect(status).toContainText('Saved 1 photos');
 	});
@@ -1277,20 +1293,20 @@ test.describe('Strava Bulk Photo Export extension', () => {
 	// flight, and aborts the run on click. The downloader checks the abort
 	// signal at every safe boundary (between activities during discovery,
 	// between items during download) and throws an AbortError - which the
-	// content script surfaces as warn-kind "Cancelled.".
+	// content script shows as warn-kind "Cancelled.".
 	//
 	// We pause the photo CDN with a deferred Promise so the run can't
 	// finish before the cancel click lands; then we resolve the Promise
 	// in the cleanup path so the route handler doesn't leak.
-	test('Cancel button aborts an in-flight run and lands on "Cancelled."', async ({ extensionPage }) => {
+	test('Cancel button aborts an active run and lands on "Cancelled."', async ({ extensionPage }) => {
 		// Pause the activity HTML fetch (the discovery phase). The
 		// content script's discoverMediaForActivity uses `fetch(url,
 		// { signal })`, so AbortController.abort() interrupts the
-		// in-flight request directly - whereas pausing the photo CDN
+		// active request directly - whereas pausing the photo CDN
 		// would block downloadBulkPhotos inside fetchPhotoViaWorker
 		// (which goes through chrome.runtime.sendMessage; no signal
 		// threads into the SW) and the cancel wouldn't land until the
-		// in-flight item completed.
+		// active item completed.
 		// eslint-disable-next-line @typescript-eslint/no-empty-function
 		let release: () => void = () => {};
 		const releasing = new Promise<void>((resolve) => {
@@ -1654,6 +1670,283 @@ test.describe('Strava Bulk Photo Export extension', () => {
 		expect(storedAfterReset).toBeUndefined();
 
 		await optionsPage.close();
+	});
+
+	// ----------  per-photo created_at_local EXIF priority ----------
+	//
+	// When Strava exposes a per-photo `created_at_local` on the React-props
+	// blob, it should beat the activity-level `start_date_local` for EXIF
+	// DateTimeOriginal - that's the priority-one branch in
+	// `toMediaRef` in src/photo-downloader.ts. The earlier EXIF test only
+	// exercises the activity-level fallback; this one pins the per-photo
+	// path so a regression in the field-name lookup is caught.
+	test('per-photo created_at_local wins over activity start_date_local for EXIF date', async ({ extensionPage }) => {
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [
+						{
+							id: 'per-photo-date',
+							largeUrl: `${cdn}/per-photo-date-2048x2048.jpg`,
+							// Per-photo timestamp - should land in EXIF.
+							createdAtLocal: '2023-12-01T08:15:30',
+						},
+					],
+					// Activity-level timestamp - should be IGNORED in favor of the per-photo one.
+					startDateLocal: '2024-05-14T10:30:00',
+				}),
+			});
+		});
+		// Same canonical 4x4 JPEG as the activity-level EXIF test - has the
+		// DQT-first layout piexifjs needs to splice EXIF into. A bare 4-byte
+		// JFIF+EOI stub trips `piexifjs.insert` and the injection silently
+		// falls back to the original bytes.
+		const sharpJpegBase64 =
+			'/9j/2wBDABALDA4MChAODQ4SERATGCgaGBYWGDEjJR0oOjM9PDkzODdASFxOQERXRTc4UG1RV19iZ2hnPk1xeXBkeFxlZ2P/2wBDARESEhgVGC8aGi9jQjhCY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2P/wAARCAAEAAQDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AKAAD//Z';
+		const realJpeg = Buffer.from(sharpJpegBase64, 'base64');
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: realJpeg });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+
+		const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+		const haystack = Buffer.from(zipBytes);
+		// Per-photo date wins.
+		expect(
+			haystack.includes(Buffer.from('2023:12:01 08:15:30', 'ascii')),
+			'per-photo created_at_local landed in EXIF DateTimeOriginal',
+		).toBe(true);
+		// And critically: the activity-level fallback was NOT used.
+		expect(
+			haystack.includes(Buffer.from('2024:05:14 10:30:00', 'ascii')),
+			'activity start_date_local was ignored (per-photo field wins)',
+		).toBe(false);
+	});
+
+	// ----------  parallel discovery ----------
+	//
+	// `downloadBulkPhotos` discovers media across activities with up to 3
+	// workers pulling from a shared cursor. A regression that serialised
+	// the loop (e.g. `await` outside the worker function, accidental
+	// `for...of` over `activities`) would not break the type checker or
+	// any existing test - the bytes still land. We prove parallelism by
+	// counting the peak number of active `/activities/<id>` fetches: a
+	// serial discovery peaks at 1, a parallel one peaks at >=2.
+	test('discovery fetches multiple activity pages concurrently', async ({ extensionPage }) => {
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		let inFlight = 0;
+		let peakInFlight = 0;
+		// Gate the response on a brief shared delay so concurrent calls
+		// have a chance to overlap. 50 ms is short enough to keep the
+		// happy path fast and long enough that a 3-worker scheduler has
+		// no excuse to serialise; a regression that serialised discovery
+		// would deterministically peak at 1 even at this width.
+		const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+		for (let i = 1; i <= 3; i++) {
+			const id = `900000000${i}`;
+			await extensionPage.route(`**/activities/${id}`, async (route) => {
+				inFlight++;
+				if (inFlight > peakInFlight) peakInFlight = inFlight;
+				await sleep(50);
+				try {
+					await route.fulfill({
+						status: 200,
+						contentType: 'text/html; charset=utf-8',
+						body: activityPageHtml(id, { photos: [{ id: `p-${id}`, largeUrl: `${cdn}/p-${id}-2048x2048.jpg` }] }),
+					});
+				} finally {
+					inFlight--;
+				}
+			});
+		}
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		// Tick the first 3 rows; that's exactly the discovery concurrency cap.
+		const checkboxes = extensionPage.locator('.sbpx-row-cb');
+		for (let i = 0; i < 3; i++) await checkboxes.nth(i).check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 3 photos',
+		);
+		// Discovery cap is `min(3, activities.length)` = 3. Allowing peak >= 2
+		// keeps the assertion robust to one-handler ordering hiccups while
+		// still failing decisively on full serialisation.
+		expect(peakInFlight, 'discovery overlapped at least two activity fetches in flight').toBeGreaterThanOrEqual(2);
+	});
+
+	// ----------  fetchWithRetry on transient ----------
+	//
+	// `fetchWithRetry` in src/background.ts retries once on 429 / 5xx /
+	// network errors with exponential backoff. The existing partial-
+	// failure test only exercises the 404 path, which is explicitly NOT
+	// retried (4xx other than 429 is "the URL is wrong, try the next
+	// candidate"). A regression in the retry-on-transient branch - e.g.
+	// off-by-one on attempt count, retrying 404s, dropping the retry
+	// entirely - would not sh in any other test.
+	test('photo fetch retries once on 503 and succeeds', async ({ extensionPage }) => {
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					// One photo - only the sized URL needs stubbing because the
+					// bare URL has no `-WxH` suffix on this synthetic input.
+					photos: [{ id: 'flaky', largeUrl: `${cdn}/flaky-2048x2048.jpg` }],
+				}),
+			});
+		});
+		// Per-URL hit counter so we can assert the retry actually happened
+		// (the bare URL is tried first and 404s; the sized URL is the one
+		// we're testing the retry policy against).
+		const hits: Record<string, number> = {};
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			const url = route.request().url();
+			hits[url] = (hits[url] ?? 0) + 1;
+			// Bare URL (no `-WxH`) doesn't exist for this fixture - 404
+			// passes through to the next candidate without retry.
+			if (!/-\d+x\d+\.jpg$/.test(url)) {
+				await route.fulfill({ status: 404, contentType: 'text/plain', body: 'not found' });
+				return;
+			}
+			// Sized URL: first attempt 503 (retryable), second attempt 200.
+			if (hits[url] === 1) {
+				await route.fulfill({ status: 503, contentType: 'text/plain', body: 'service unavailable' });
+				return;
+			}
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+		});
+
+		await installAnchorClickCapture(extensionPage);
+		await extensionPage.locator('.sbpx-row-cb').first().check();
+		await extensionPage.locator('[data-role="bulk"]').click();
+
+		// Photo lands in the zip despite the first 503.
+		await expect(extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]')).toContainText(
+			'Saved 1 photos',
+		);
+		const sizedUrl = `${cdn}/flaky-2048x2048.jpg`;
+		expect(hits[sizedUrl], 'sized URL was hit exactly twice (one 503 retry + one 200)').toBe(2);
+	});
+
+	// ----------  sanitizeFilename path-traversal defence ----------
+	//
+	// `sanitizeFilename` (post-template whole-string pass) splits the
+	// rendered path on `/` and filters empty, `.`, and `..` segments
+	// before it lands in the zip - belt-and-suspenders over JSZip's own
+	// path normalisation. A regression that dropped the filter (or
+	// reordered it before the `/`-preserving sanitization that creates
+	// subdirectories) would let a hostile template produce a path with
+	// `..` or `//` in it.
+	test('hostile template segments (.., .) are filtered from the zip path', async ({ extensionPage, context }) => {
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		// Template injects literal `..` and `.` segments around real
+		// placeholders. After sanitizeFilename:
+		//   `9000000001/../traversal/./{kind}-{index}.{ext}`
+		//   -> split: ['9000000001', '..', 'traversal', '.', 'photo-01.jpg']
+		//   -> filter: ['9000000001', 'traversal', 'photo-01.jpg']
+		//   -> join:   '9000000001/traversal/photo-01.jpg'
+		await sw!.evaluate(async () => {
+			await chrome.storage.sync.set({
+				sbpx_filename_template_v1: '{activity_id}/../traversal/./{kind}-{index}.{ext}',
+			});
+		});
+
+		const cdn = 'https://dgtzuqphqg23d.cloudfront.net';
+		await extensionPage.route('**/activities/9000000001', async (route) => {
+			await route.fulfill({
+				status: 200,
+				contentType: 'text/html; charset=utf-8',
+				body: activityPageHtml('9000000001', {
+					photos: [{ id: 'trav', largeUrl: `${cdn}/trav-2048x2048.jpg` }],
+				}),
+			});
+		});
+		await extensionPage.context().route(`${cdn}/**`, async (route) => {
+			await route.fulfill({ status: 200, contentType: 'image/jpeg', body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]) });
+		});
+
+		try {
+			await installAnchorClickCapture(extensionPage);
+			await extensionPage.locator('.sbpx-row-cb').first().check();
+			await extensionPage.locator('[data-role="bulk"]').click();
+			await expect(
+				extensionPage.locator('[data-role="status"][data-kind="ok"] [data-role="status-text"]'),
+			).toContainText('Saved 1 photos');
+
+			const zipBytes = await waitForZipBytes(extensionPage, 'strava_media_9000000001.zip');
+			const haystack = Buffer.from(zipBytes);
+			// Cleaned path is present.
+			expect(
+				haystack.includes(Buffer.from('9000000001/traversal/photo-01.jpg', 'utf8')),
+				'rendered path has the `..` and `.` segments filtered out',
+			).toBe(true);
+			// And the dangerous shapes are not.
+			expect(haystack.includes(Buffer.from('/../', 'utf8')), 'parent-traversal segment absent').toBe(false);
+			expect(haystack.includes(Buffer.from('//', 'utf8')), 'empty (double-slash) segment absent').toBe(false);
+			expect(haystack.includes(Buffer.from('/./', 'utf8')), 'self-segment absent').toBe(false);
+		} finally {
+			// Reset the template even if assertions threw, so subsequent tests
+			// don't inherit the hostile pattern.
+			await sw!.evaluate(async () => {
+				await chrome.storage.sync.remove('sbpx_filename_template_v1');
+			});
+		}
+	});
+
+	// ----------  options page save failures ----------
+	//
+	// `saveFilenameTemplate` now re-throws on storage failure (quota
+	// exceeded, runtime gone). The options page's `persist()` helper
+	// catches and shows `optionsSaveFailed` next to the Save button
+	// instead of falsely confirming "Saved." over a write that never
+	// landed. We stub `chrome.storage.sync.set` to throw and assert the
+	// inline failure text appears.
+	test('options page shows error inline when storage.sync.set rejects', async ({ extensionPage, context }) => {
+		void extensionPage; // forces SW registration
+		const [sw] = context.serviceWorkers();
+		expect(sw, 'extension service worker is registered').toBeDefined();
+		const extensionId = new URL(sw!.url()).host;
+		const optionsPage = await context.newPage();
+		try {
+			await optionsPage.goto(`chrome-extension://${extensionId}/src/options.html`);
+			await optionsPage.waitForSelector('[data-role="template-input"]');
+
+			// Override chrome.storage.sync.set on the options-page world so
+			// the persist call rejects with a deterministic error message.
+			await optionsPage.evaluate(() => {
+				chrome.storage.sync.set = (): Promise<void> => Promise.reject(new Error('TEST_QUOTA_EXCEEDED'));
+			});
+
+			// Enter a non-default value so saveFilenameTemplate takes the
+			// `.set` branch (an empty/default value would call `.remove`
+			// instead, bypassing the override).
+			const input = optionsPage.locator('[data-role="template-input"]');
+			await input.fill('{date}/{activity_id}/{kind}-{index}.{ext}');
+			await optionsPage.locator('[data-role="save"]').click();
+
+			const confirmation = optionsPage.locator('[data-role="saved-confirmation"]');
+			await expect(confirmation).toBeVisible();
+			await expect(confirmation).toContainText('Save failed:');
+			await expect(confirmation).toContainText('TEST_QUOTA_EXCEEDED');
+		} finally {
+			await optionsPage.close();
+		}
 	});
 });
 

@@ -131,7 +131,7 @@ test.describe('README screenshots', () => {
 	});
 
 	test('bulk - mid-download with spinner visible', async ({ extensionPage }) => {
-		// Slow each photo fetch so the in-flight "Downloading N / M…" state
+		// Slow each photo fetch so the active "Downloading N / M…" state
 		// stays on screen long enough to capture. Without the delay the
 		// stubbed network resolves in <1ms and the toolbar lands on the
 		// terminal "Saved N photos" status before the screenshot fires.
@@ -140,7 +140,7 @@ test.describe('README screenshots', () => {
 
 		await extensionPage.locator('.sbpx-select-all-cb').check();
 		await extensionPage.locator('[data-role="bulk"]').click();
-		// Wait for the info-kind status to render (the in-flight state with
+		// Wait for the info-kind status to render (the active state with
 		// the spinner alongside "Downloading N / M…" or "Preparing…").
 		await extensionPage.locator('[data-role="status"][data-kind="info"]').waitFor({ state: 'visible', timeout: 5000 });
 		// One animation frame so the spinner's rotate transform has a
