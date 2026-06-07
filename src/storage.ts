@@ -53,14 +53,17 @@ export async function loadSavedMediaIds(): Promise<Set<string>> {
 		const map = got[STORAGE_KEY] ?? {};
 		const now = Date.now();
 		const fresh: SavedMap = {};
+		let dropped = 0;
 		for (const [id, entry] of Object.entries(map)) {
 			if (now - entry.savedAt < ENTRY_TTL_MS) {
 				fresh[id] = entry;
+			} else {
+				dropped++;
 			}
 		}
 		// Write back only if we actually dropped anything, to avoid a
 		// pointless write on every load.
-		if (Object.keys(fresh).length !== Object.keys(map).length) {
+		if (dropped > 0) {
 			void chrome.storage.local.set({ [STORAGE_KEY]: fresh });
 		}
 		return new Set(Object.keys(fresh));

@@ -2,7 +2,7 @@
 // options page; we substitute whitelisted `{variable}` placeholders to
 // derive the path each media item takes inside the zip.
 //
-// The whitelist is deliberately small (8 variables) so the surface stays
+// The whitelist is deliberately small (8 variables), so the surface stays
 // predictable - an unknown `{foo}` is left as a literal "{foo}" rather
 // than collapsing to empty, which makes typos visible to the user
 // instead of silently disappearing.
@@ -93,9 +93,12 @@ export function renderFilenameTemplate(template: string, ctx: FilenameTemplateCo
 			case 'kind':
 				return ctx.kind;
 			case 'index': {
+				// The placeholder regex captures width as `\d+`, so the
+				// `Number(width)` is always a finite non-negative integer
+				// before the Math.min/max clamps it into [1, 6]. No need
+				// for a separate NaN guard around `padStart`.
 				const w = width === undefined ? 2 : Math.min(6, Math.max(1, Number(width)));
-				const pad = Number.isFinite(w) && w > 0 ? w : 2;
-				return String(ctx.index).padStart(pad, '0');
+				return String(ctx.index).padStart(w, '0');
 			}
 			case 'ext':
 				return ctx.ext.replace(/[^a-z0-9]/gi, '');

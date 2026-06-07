@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel in-flight runs for the same branch on a new push.
+# Cancel active runs for the same branch on a new push.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
