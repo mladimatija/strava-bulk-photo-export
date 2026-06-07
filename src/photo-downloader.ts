@@ -623,8 +623,18 @@ function downloadBlob(filename: string, blob: Blob): void {
 
 /** Sanitize a server-suggested filename so it's safe to use as a zip entry. */
 function sanitizeFilename(name: string): string {
-	const trimmed = name.replace(/[\\?%*:|"<>]/g, '_').trim();
-	return trimmed !== '' ? trimmed : 'file';
+	const cleaned = name.replace(/[\\?%*:|"<>]/g, '_').trim();
+	// Forward slashes are intentionally preserved (they create subdirectories
+	// inside the zip from a template like `{date}/{kind}-{index}.{ext}`), but
+	// empty / `.` / `..` segments must be dropped so a pathological input
+	// (activity name that sanitizes to an empty component) can't produce a
+	// leading-slash or parent-traversal path. JSZip neutralises both today,
+	// but leaning on that for path safety is brittle - belt-and-suspenders.
+	const safe = cleaned
+		.split('/')
+		.filter((segment) => segment !== '' && segment !== '.' && segment !== '..')
+		.join('/');
+	return safe !== '' ? safe : 'file';
 }
 
 /**
@@ -693,7 +703,7 @@ export async function downloadBulkPhotos(
 	// Phase 1: discover. Parallel with a small concurrency cap and a
 	// pre-sized result array so the final order matches the user's row
 	// order in the table (which the per-activity directory naming inside
-	// the zip relies on). Per-activity errors stay silent so one 404 in
+	// the zip relies on). Per-activity errors stay silent, so one 404 in
 	// a 50-activity run doesn't surface as a failure; AbortError from
 	// the signal does propagate.
 	onProgress?.({ stage: 'discovering', completed: 0, total: activities.length });
@@ -763,6 +773,10 @@ export async function downloadBulkPhotos(
 	// run that throws on zip generation doesn't leave history entries
 	// claiming success.
 	const succeededItems: { mediaId: string; activityId: string }[] = [];
+	// Index activities by id so the per-item lookup in the download loop is
+	// O(1) instead of O(activities). Matters for runs in the 50-activity /
+	// 200-photo range where a `find` per item would be 10k comparisons.
+	const activityById = new Map(activities.map((a) => [a.id, a] as const));
 	let completed = 0;
 	let photoCount = 0;
 	let videoCount = 0;
@@ -779,7 +793,7 @@ export async function downloadBulkPhotos(
 				signal?.throwIfAborted();
 				const i = cursor++;
 				const item = allMedia[i]!;
-				const activity = activities.find((a) => a.id === item.activityId);
+				const activity = activityById.get(item.activityId);
 				const activityName = activity?.name;
 				try {
 					const blob =
@@ -807,6 +821,11 @@ export async function downloadBulkPhotos(
 		}),
 	);
 
+	// Final abort check before we commit to zip generation. If an abort
+	// fires here the in-memory `zip` object falls out of scope unreferenced -
+	// `generateAsync` never runs, so no archive bytes ever reach `downloadBlob`,
+	// and `markMediaIdsSaved` (below) is similarly skipped. The user sees a
+	// "Cancelled." status and a re-run picks up where they stopped.
 	signal?.throwIfAborted();
 	const successCount = total - failed.length;
 	if (successCount === 0) {
