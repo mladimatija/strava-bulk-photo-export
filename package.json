@@ -1,6 +1,6 @@
 {
 	"name": "strava-bulk-photo-export",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"private": true,
 	"description": "Chrome extension that adds bulk photo export to Strava's My Activities and activity pages. Runs locally in your browser.",
 	"type": "module",

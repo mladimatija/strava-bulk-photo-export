@@ -2,6 +2,30 @@
 
 All notable changes will be documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions are SemVer.
 
+## [1.0.1] - 2026-06-07
+
+### Fixed
+
+- **Path traversal in zip entries.** `sanitizeFilename` now drops empty, `.`, and `..` segments from the rendered template path so a hostile activity name or template can't produce an unsafe entry like `/../foo`. JSZip neutralised these in practice, but leaning on that for path safety was fragile.
+- **Service-worker eviction mid-drain.** When the MV3 SW is evicted while a chunked transfer is in flight, the content script surfaces an actionable "Download transfer lost – reload the page" status instead of the cryptic `transfer expired or unknown`.
+- **Videos + saved-history status mis-label.** A bulk run that included videos AND skipped saved-history items was being reported as photos-only because the skipped-history branch took priority. The terminal-status helper now picks videos > skipped-history > photos-only.
+
+### Changed
+
+- **Chunked SW → content transport is pipelined.** The next `sbpx-read-chunk` request is dispatched before decoding the current slice's base64. For a 100 MiB video this roughly halves effective transport overhead.
+- **`allAlreadySaved` status surfaces the skip count.** Reads "Nothing new to save – all N selected items are already in your downloads." Translated across all 15 locales.
+- **Options-page save failures are surfaced inline.** `chrome.storage.sync` errors (quota exceeded, runtime gone) no longer silently swallow; the new `optionsSaveFailed` string is shown next to Save.
+- **Multi-tab SW memory cap.** A 64 MiB cap on total held chunked transfers prevents a user with multiple tabs from blowing past Chrome's MV3 SW eviction threshold; over-cap requests return a clear "wait for in-flight downloads to finish" error.
+- **EXIF `ImageDescription` is capped at 1024 chars** with a `…` truncation tail to defend oversized APP1 tags against downstream EXIF parsers.
+- **`transferId` uses `crypto.randomUUID()`** instead of `Math.random` — 122 bits of entropy makes the id unguessable.
+- **Download loop indexes activities by id.** A single `Map` lookup replaces `Array.find` per media item; matters at the 50-activity / 200-photo end of the range.
+
+### Internal
+
+- New E2E coverage: per-photo `created_at_local` EXIF priority, parallel activity discovery, `fetchWithRetry` 503 → 200 retry, path-traversal sanitization, options-page error branch.
+- `waitForZipBytes` test helper uses `expect.poll` instead of a `Date.now` / `waitForTimeout` deadline race.
+- Cleanup: dead `Number.isFinite` guard in filename-template `{index}` padding; double `Object.keys().length` call in saved-history prune.
+
 ## [1.0.0] - 2026-05-14
 
 Initial public release.
@@ -30,4 +54,5 @@ Initial public release.
 - The background service worker performs all CDN fetches, EXIF injection, and HLS muxing. Content scripts orchestrate UI and progress.
 - Built with TypeScript 6, Vite 8 (Rolldown), and the `@crxjs/vite-plugin`. Runtime deps: `jszip`, `piexifjs`.
 
+[1.0.1]: https://github.com/mladimatija/strava-bulk-photo-export/releases/tag/v1.0.1
 [1.0.0]: https://github.com/mladimatija/strava-bulk-photo-export/releases/tag/v1.0.0
