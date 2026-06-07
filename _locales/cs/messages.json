@@ -156,7 +156,13 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "Není co stáhnout – každá vybraná položka už je v tvých stažených souborech."
+		"message": "Není co stáhnout - všech $COUNT$ vybraných položek už je v tvých stažených souborech.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			}
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export"
@@ -178,6 +184,15 @@
 	},
 	"optionsSavedConfirmation": {
 		"message": "Uloženo."
+	},
+	"optionsSaveFailed": {
+		"message": "Uložení selhalo: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "QUOTA_BYTES_PER_ITEM exceeded"
+			}
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"

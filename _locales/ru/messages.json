@@ -156,7 +156,13 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "Нет нового для сохранения - все выбранные элементы уже скачаны."
+		"message": "Нет нового для сохранения - все $COUNT$ выбранных элементов уже скачаны.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			}
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export"
@@ -178,6 +184,15 @@
 	},
 	"optionsSavedConfirmation": {
 		"message": "Сохранено."
+	},
+	"optionsSaveFailed": {
+		"message": "Не удалось сохранить: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "QUOTA_BYTES_PER_ITEM exceeded"
+			}
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"

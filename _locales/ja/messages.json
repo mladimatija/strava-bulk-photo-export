@@ -156,7 +156,13 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "新しく保存するものはありません - 選択したすべての項目はすでにダウンロード済みです。"
+		"message": "新しく保存するものはありません - 選択した $COUNT$ 件はすべてダウンロード済みです。",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			}
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export"
@@ -178,6 +184,15 @@
 	},
 	"optionsSavedConfirmation": {
 		"message": "保存しました。"
+	},
+	"optionsSaveFailed": {
+		"message": "保存に失敗しました: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "QUOTA_BYTES_PER_ITEM exceeded"
+			}
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"

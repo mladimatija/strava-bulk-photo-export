@@ -156,7 +156,13 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "Nichts Neues zu speichern – alle ausgewählten Elemente sind bereits in deinen Downloads."
+		"message": "Nichts Neues zu speichern - alle $COUNT$ ausgewählten Elemente sind bereits in deinen Downloads.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			}
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export"
@@ -178,6 +184,15 @@
 	},
 	"optionsSavedConfirmation": {
 		"message": "Gespeichert."
+	},
+	"optionsSaveFailed": {
+		"message": "Speichern fehlgeschlagen: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "QUOTA_BYTES_PER_ITEM exceeded"
+			}
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"

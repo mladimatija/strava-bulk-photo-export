@@ -156,7 +156,13 @@
 		}
 	},
 	"allAlreadySaved": {
-		"message": "Ingenting nytt å lagre – alle valgte elementer er allerede i nedlastingene dine."
+		"message": "Ingenting nytt å lagre - alle $COUNT$ valgte elementer er allerede i nedlastingene dine.",
+		"placeholders": {
+			"count": {
+				"content": "$1",
+				"example": "12"
+			}
+		}
 	},
 	"optionsTitle": {
 		"message": "Strava Bulk Photo Export"
@@ -178,6 +184,15 @@
 	},
 	"optionsSavedConfirmation": {
 		"message": "Lagret."
+	},
+	"optionsSaveFailed": {
+		"message": "Lagring mislyktes: $REASON$",
+		"placeholders": {
+			"reason": {
+				"content": "$1",
+				"example": "QUOTA_BYTES_PER_ITEM exceeded"
+			}
+		}
 	},
 	"koFiTitle": {
 		"message": "Buy Me a Coffee at ko-fi.com"
